@@ -190,3 +190,5 @@ Ankh.NoLoad
 # RN New Version App Generation
 Examples/testapp_rn
 /Examples/CodePushDemoAppTest/
+/Examples/CodePushDemoAppCpp/android/
+/Examples/CodePushDemoAppCpp/ios/
