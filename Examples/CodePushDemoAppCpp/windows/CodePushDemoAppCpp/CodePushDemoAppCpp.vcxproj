@@ -98,6 +98,8 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CodePush.h" />
+    <ClInclude Include="CodePushUtils.h" />
     <ClInclude Include="ReactPackageProvider.h" />
     <ClInclude Include="AutolinkedNativeModules.g.h" />
     <ClInclude Include="pch.h" />
@@ -125,6 +127,9 @@
     <Image Include="Assets\Wide310x150Logo.scale-200.png" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CodePush.cpp" />
+    <ClCompile Include="CodePushInstallMode.cpp" />
+    <ClCompile Include="CodePushUtils.cpp" />
     <ClCompile Include="ReactPackageProvider.cpp" />
     <ClCompile Include="AutolinkedNativeModules.g.cpp" />
     <ClCompile Include="pch.cpp">

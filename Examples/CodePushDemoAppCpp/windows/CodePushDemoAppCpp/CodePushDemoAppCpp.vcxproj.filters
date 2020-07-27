@@ -12,12 +12,27 @@
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="ReactPackageProvider.cpp" />
     <ClCompile Include="AutolinkedNativeModules.g.cpp" />
+    <ClCompile Include="CodePush.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
+    <ClCompile Include="CodePushUtils.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
+    <ClCompile Include="CodePushInstallMode.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="App.h" />
     <ClInclude Include="ReactPackageProvider.h" />
     <ClInclude Include="AutolinkedNativeModules.g.h" />
+    <ClInclude Include="CodePush.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushUtils.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Wide310x150Logo.scale-200.png">
@@ -48,6 +63,9 @@
   <ItemGroup>
     <Filter Include="Assets">
       <UniqueIdentifier>{e48dc53e-40b1-40cb-970a-f89935452892}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="CodePush">
+      <UniqueIdentifier>{a6cfefef-527f-4450-82e5-1fc53152a8d4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
