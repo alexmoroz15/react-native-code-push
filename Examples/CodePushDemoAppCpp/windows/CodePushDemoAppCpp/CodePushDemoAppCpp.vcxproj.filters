@@ -18,7 +18,7 @@
     <ClCompile Include="CodePushUtils.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
-    <ClCompile Include="CodePushInstallMode.cpp">
+    <ClCompile Include="CodePushPackage.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
   </ItemGroup>
@@ -31,6 +31,9 @@
       <Filter>CodePush</Filter>
     </ClInclude>
     <ClInclude Include="CodePushUtils.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushPackage.h">
       <Filter>CodePush</Filter>
     </ClInclude>
   </ItemGroup>

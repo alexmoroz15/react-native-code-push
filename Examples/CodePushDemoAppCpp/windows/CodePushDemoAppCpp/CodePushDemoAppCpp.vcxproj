@@ -99,6 +99,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CodePush.h" />
+    <ClInclude Include="CodePushPackage.h" />
     <ClInclude Include="CodePushUtils.h" />
     <ClInclude Include="ReactPackageProvider.h" />
     <ClInclude Include="AutolinkedNativeModules.g.h" />
@@ -128,7 +129,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CodePush.cpp" />
-    <ClCompile Include="CodePushInstallMode.cpp" />
+    <ClCompile Include="CodePushPackage.cpp" />
     <ClCompile Include="CodePushUtils.cpp" />
     <ClCompile Include="ReactPackageProvider.cpp" />
     <ClCompile Include="AutolinkedNativeModules.g.cpp" />

@@ -9,6 +9,10 @@
 using namespace winrt::CodePushDemoAppCpp;
 using namespace winrt::CodePushDemoAppCpp::implementation;
 
+//winrt::Microsoft::ReactNative::ReactInstanceSettings g_instanceSettings{ nullptr };
+//winrt::Microsoft::ReactNative::IReactContext g_reactContext{ nullptr };
+winrt::Microsoft::ReactNative::ReactNativeHost g_host{ nullptr };
+
 /// <summary>
 /// Initializes the singleton application object.  This is the first line of
 /// authored code executed, and as such is the logical equivalent of main() or
@@ -33,6 +37,11 @@ App::App() noexcept
 #else
     InstanceSettings().EnableDeveloperMenu(false);
 #endif
+
+    //instanceSettings = InstanceSettings();
+    //InstanceSettings().Properties().Set(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
+    g_host = Host();
+    //g_instanceSettings = InstanceSettings();
 
     RegisterAutolinkedNativeModulePackages(PackageProviders()); // Includes any autolinked modules
 
