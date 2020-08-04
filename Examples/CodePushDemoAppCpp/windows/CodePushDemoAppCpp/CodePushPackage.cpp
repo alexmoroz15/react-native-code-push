@@ -14,25 +14,23 @@ using namespace winrt::Windows::Storage;
 using namespace std;
 using namespace filesystem;
 
-const std::wstring CodePushFolderPrefix{ L"CodePush" };
+const winrt::hstring CodePushFolderPrefix{ L"CodePush" };
 const winrt::hstring StatusFile{ L"codepush.json" };
+const winrt::hstring UpdateMetadataFileName{ L"app.json" };
 
 path GetLocalDataPath()
 {
 	return winrt::Windows::Storage::ApplicationData::Current().LocalFolder().Path().c_str();
-	//return Uri(winrt::Windows::Storage::ApplicationData::Current().LocalFolder().Path());
 }
 
 path GetCodePushPath()
 {
 	return GetLocalDataPath() / CodePushFolderPrefix.c_str();
-	//return Uri(GetLocalDataPath().AbsoluteUri(), CodePushFolderPrefix);
 }
 
 path GetStatusFilePath()
 {
 	return GetCodePushPath() / StatusFile.c_str();
-	//return Uri(GetCodePushPath().AbsoluteUri(), StatusFile);
 }
 
 IAsyncOperation<IJsonValue> GetCurrentPackageInfo()
@@ -40,7 +38,6 @@ IAsyncOperation<IJsonValue> GetCurrentPackageInfo()
 	try
 	{
 		auto statusFilePath = GetStatusFilePath();
-		//auto file = co_await StorageFile::GetFileFromPathAsync(statusFilePath.AbsoluteUri());
 		auto file = co_await StorageFile::GetFileFromPathAsync(statusFilePath.c_str());
 		auto content = co_await FileIO::ReadTextAsync(file);
 		auto json = JsonObject::Parse(content);
@@ -48,11 +45,9 @@ IAsyncOperation<IJsonValue> GetCurrentPackageInfo()
 	}
 	catch (...)
 	{
-		//co_return JsonValue::CreateNullValue;
 		OutputDebugStringW(L"Error has occurred.\n");
 		co_return JsonValue::CreateNullValue();
 	}
-	//return JsonValue::CreateNullValue();
 }
 
 IAsyncOperation<winrt::hstring> GetCurrentPackageHash()
@@ -66,18 +61,61 @@ IAsyncOperation<winrt::hstring> GetCurrentPackageHash()
 	co_return info.GetObject().GetNamedString(L"currentPackage");
 }
 
-JsonValue GetPackage(winrt::hstring)
+path GetPackageFolderPath(winrt::hstring& packageHash)
 {
-	return JsonValue::CreateNullValue();
+	return GetCodePushPath() / packageHash.c_str();
 }
 
-IAsyncOperation<JsonValue> CodePush::CodePushPackage::GetCurrentPackage()
+IAsyncOperation<IJsonValue> GetPackage(winrt::hstring& packageHash)
+{
+	try
+	{
+		auto updateDirectoryPath = GetPackageFolderPath(packageHash);
+		auto updateMetadataFilePath = updateDirectoryPath / UpdateMetadataFileName.c_str();
+
+		auto file = co_await StorageFile::GetFileFromPathAsync(updateMetadataFilePath.c_str());
+		auto content = co_await FileIO::ReadTextAsync(file);
+		auto json = JsonObject::Parse(content);
+		co_return json;
+	}
+	catch (...)
+	{
+		co_return JsonValue::CreateNullValue();
+	}
+}
+
+/*
++ (NSDictionary *)getPackage:(NSString *)packageHash
+					   error:(NSError **)error
+{
+	NSString *updateDirectoryPath = [self getPackageFolderPath:packageHash];
+	NSString *updateMetadataFilePath = [updateDirectoryPath stringByAppendingPathComponent:UpdateMetadataFileName];
+
+	if (![[NSFileManager defaultManager] fileExistsAtPath:updateMetadataFilePath]) {
+		return nil;
+	}
+
+	NSString *updateMetadataString = [NSString stringWithContentsOfFile:updateMetadataFilePath
+															   encoding:NSUTF8StringEncoding
+																  error:error];
+	if (!updateMetadataString) {
+		return nil;
+	}
+
+	NSData *updateMetadata = [updateMetadataString dataUsingEncoding:NSUTF8StringEncoding];
+	return [NSJSONSerialization JSONObjectWithData:updateMetadata
+										   options:kNilOptions
+											 error:error];
+}
+*/
+
+IAsyncOperation<IJsonValue> CodePush::CodePushPackage::GetCurrentPackage()
 {
 	auto packageHash = co_await GetCurrentPackageHash();
 	if (packageHash.empty())
 	{
-		return JsonValue::CreateNullValue();
+		co_return JsonValue::CreateNullValue();
 	}
 
-	return GetPackage(packageHash);
+	co_return co_await GetPackage(packageHash);
 }

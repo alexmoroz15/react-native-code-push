@@ -50,7 +50,7 @@ namespace CodePush
 
 		void LoadBundle();
 		void RestartAppInternal(bool onlyIfUpdateIsPending);
-		bool IsPendingUpdate(std::wstring& updateHash);
+		bool IsPendingUpdate(winrt::hstring&& updateHash);
 
 		winrt::Microsoft::ReactNative::ReactNativeHost m_host;
 		winrt::Microsoft::ReactNative::ReactInstanceSettings m_instance;

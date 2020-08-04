@@ -8,6 +8,6 @@ namespace CodePush
 	{
 	private:
 	public:
-		static winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Data::Json::JsonValue> GetCurrentPackage();
+		static winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Data::Json::IJsonValue> GetCurrentPackage();
 	};
 }

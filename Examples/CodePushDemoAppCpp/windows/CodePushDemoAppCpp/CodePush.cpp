@@ -9,8 +9,13 @@
 
 #include <exception>
 
+#include "AutolinkedNativeModules.g.h"
+#include "ReactPackageProvider.h"
+
 using namespace winrt::Microsoft::ReactNative;
 using namespace winrt::Windows::Data::Json;
+
+const winrt::hstring PackageHashKey{ L"packageHash" };
 
 void CodePush::CodePush::LoadBundle()
 {
@@ -25,6 +30,7 @@ void CodePush::CodePush::LoadBundle()
     m_context.UIDispatcherQueue().Post([host = m_host]() {
         host.ReloadInstance(); });
     */
+    
     /*
     auto bundleRootPath = m_host.InstanceSettings().BundleRootPath();
     OutputDebugStringW((L"BundleRootPath: " + bundleRootPath + L"\n").c_str());
@@ -39,7 +45,10 @@ void CodePush::CodePush::LoadBundle()
     */
 
     m_host.InstanceSettings().UIDispatcher().Post([host = m_host]() {
-        host.ReloadInstance(); });
+        host.ReloadInstance(); 
+        //OutputDebugStringW(L"What's up?");
+        //host.PackageProviders().Append(winrt::make<winrt::CodePushDemoAppCpp::implementation::ReactPackageProvider>());
+    });
 }
 
 /*
@@ -127,7 +136,7 @@ void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
     //m_instance = g_instanceSettings;
 }
 
-bool CodePush::CodePush::IsPendingUpdate(std::wstring& packageHash)
+bool CodePush::CodePush::IsPendingUpdate(winrt::hstring&& packageHash)
 {
     // I'm not sure if UWP has a similar local dedicated storage object
 
@@ -159,7 +168,26 @@ void CodePush::CodePush::GetNewStatusReport(ReactPromise<JSValue> promise) noexc
 
 winrt::fire_and_forget CodePush::CodePush::GetUpdateMetadata(CodePushUpdateState updateState, ReactPromise<JSValue> promise) noexcept
 {
-    auto currentPackage = co_await CodePushPackage::GetCurrentPackage();
+    try
+    {
+        auto currentPackage = co_await CodePushPackage::GetCurrentPackage();
+        if (currentPackage.ValueType() == JsonValueType::Null)
+        {
+            promise.Resolve(JSValue::Null);
+            co_return;
+        }
+
+        // ...
+        auto currentUpdateIsPending = IsPendingUpdate(currentPackage.GetObject().GetNamedString(PackageHashKey));
+
+
+        //promise.Resolve(currentPackage);
+        promise.Resolve(JSValue::Null);
+    }
+    catch (std::exception e)
+    {
+        promise.Reject(e.what());
+    }
     //m_host.InstanceSettings().BundleRootPath();
 }
 
@@ -249,7 +277,7 @@ void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
     }
     
     _restartInProgress = true;
-    if (!onlyIfUpdateIsPending /* || IsPendingUpdate(std::wstring()) */)
+    if (!onlyIfUpdateIsPending || IsPendingUpdate(L""))
     {
         LoadBundle();
         CodePushUtils::Log(L"Restarting app");
@@ -267,7 +295,7 @@ void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
 
 void CodePush::CodePush::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue>&& promise) noexcept
 {
-	RestartAppInternal(!onlyIfUpdateIsPending);
+	RestartAppInternal(onlyIfUpdateIsPending);
 	promise.Resolve(JSValue::Null);
 }
 
