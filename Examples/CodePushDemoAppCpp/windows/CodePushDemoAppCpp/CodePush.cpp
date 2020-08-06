@@ -8,29 +8,185 @@
 #include <winrt/Windows.Data.Json.h>
 
 #include <exception>
+#include <filesystem>
 
 #include "AutolinkedNativeModules.g.h"
 #include "ReactPackageProvider.h"
 
-using namespace winrt::Microsoft::ReactNative;
-using namespace winrt::Windows::Data::Json;
+using namespace winrt;
+using namespace Microsoft::ReactNative;
+using namespace Windows::Data::Json;
+using namespace std::filesystem;
+using namespace Windows::Foundation;
 
-const winrt::hstring PackageHashKey{ L"packageHash" };
+const hstring PackageHashKey{ L"packageHash" };
 
-void CodePush::CodePush::LoadBundle()
+bool IsPackageBundleLatest(IJsonValue packageMetadata)
 {
-    //auto instanceManager = ReactApplication::InstanceSettings;
-    
-    // Get the latest JSBundle file
+    // idk
+    return false;
+}
+/*
+private boolean isPackageBundleLatest(JSONObject packageMetadata) {
+        try {
+            Long binaryModifiedDateDuringPackageInstall = null;
+            String binaryModifiedDateDuringPackageInstallString = packageMetadata.optString(CodePushConstants.BINARY_MODIFIED_TIME_KEY, null);
+            if (binaryModifiedDateDuringPackageInstallString != null) {
+                binaryModifiedDateDuringPackageInstall = Long.parseLong(binaryModifiedDateDuringPackageInstallString);
+            }
+            String packageAppVersion = packageMetadata.optString("appVersion", null);
+            long binaryResourcesModifiedTime = this.getBinaryResourcesModifiedTime();
+            return binaryModifiedDateDuringPackageInstall != null &&
+                    binaryModifiedDateDuringPackageInstall == binaryResourcesModifiedTime &&
+                    (isUsingTestConfiguration() || sAppVersion.equals(packageAppVersion));
+        } catch (NumberFormatException e) {
+            throw new CodePushUnknownException("Error in reading binary modified date from package metadata", e);
+        }
+    }
+*/
 
-    // Change the local JSBundle path
+IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile()
+{
+    return GetJSBundleFile(DefaultJSBundleName);
+}
 
-    // Initialize after restart?
-    /*
-    m_context.UIDispatcherQueue().Post([host = m_host]() {
-        host.ReloadInstance(); });
-    */
-    
+IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile(hstring assetsBundleFileName)
+{
+    m_assetsBundleFileName = assetsBundleFileName;
+    auto binaryJSBundleUrl = AssetsBundlePrefix +  m_assetsBundleFileName;
+    //auto binaryJSBundleUrl = m_assetsBundleFileName;
+    auto packageFilePath = co_await CodePushPackage::GetCurrentPackageBundlePath(m_assetsBundleFileName);
+    if (packageFilePath.empty())
+    {
+        //There has not been any downloaded updates
+        // log stuff
+        CodePushUtils::LogBundleUrl(packageFilePath.c_str());
+        co_return binaryJSBundleUrl;
+    }
+
+    auto packageMetadata = co_await CodePushPackage::GetCurrentPackage();
+    if (IsPackageBundleLatest(packageMetadata))
+    {
+        CodePushUtils::LogBundleUrl(packageFilePath.c_str());
+        co_return packageFilePath;
+    }
+    else
+    {
+        CodePushUtils::LogBundleUrl(binaryJSBundleUrl.c_str());
+        co_return binaryJSBundleUrl;
+    }
+}
+
+/*
+public String getJSBundleFileInternal(String assetsBundleFileName) {
+        this.mAssetsBundleFileName = assetsBundleFileName;
+        String binaryJsBundleUrl = CodePushConstants.ASSETS_BUNDLE_PREFIX + assetsBundleFileName;
+
+        String packageFilePath = null;
+        try {
+            packageFilePath = mUpdateManager.getCurrentPackageBundlePath(this.mAssetsBundleFileName);
+        } catch (CodePushMalformedDataException e) {
+            // We need to recover the app in case 'codepush.json' is corrupted
+            CodePushUtils.log(e.getMessage());
+            clearUpdates();
+        }
+
+        if (packageFilePath == null) {
+            // There has not been any downloaded updates.
+            CodePushUtils.logBundleUrl(binaryJsBundleUrl);
+            sIsRunningBinaryVersion = true;
+            return binaryJsBundleUrl;
+        }
+
+        JSONObject packageMetadata = this.mUpdateManager.getCurrentPackage();
+        if (isPackageBundleLatest(packageMetadata)) {
+            CodePushUtils.logBundleUrl(packageFilePath);
+            sIsRunningBinaryVersion = false;
+            return packageFilePath;
+        } else {
+            // The binary version is newer.
+            this.mDidUpdate = false;
+            if (!this.mIsDebugMode || hasBinaryVersionChanged(packageMetadata)) {
+                this.clearUpdates();
+            }
+
+            CodePushUtils.logBundleUrl(binaryJsBundleUrl);
+            sIsRunningBinaryVersion = true;
+            return binaryJsBundleUrl;
+        }
+    }
+*/
+/*
++ (NSURL *)bundleURLForResource:(NSString *)resourceName
+                  withExtension:(NSString *)resourceExtension
+                   subdirectory:(NSString *)resourceSubdirectory
+                         bundle:(NSBundle *)resourceBundle
+{
+    bundleResourceName = resourceName;
+    bundleResourceExtension = resourceExtension;
+    bundleResourceSubdirectory = resourceSubdirectory;
+    bundleResourceBundle = resourceBundle;
+
+    [self ensureBinaryBundleExists];
+
+    NSString *logMessageFormat = @"Loading JS bundle from %@";
+
+    NSError *error;
+    NSString *packageFile = [CodePushPackage getCurrentPackageBundlePath:&error];
+    NSURL *binaryBundleURL = [self binaryBundleURL];
+
+    if (error || !packageFile) {
+        CPLog(logMessageFormat, binaryBundleURL);
+        isRunningBinaryVersion = YES;
+        return binaryBundleURL;
+    }
+
+    NSString *binaryAppVersion = [[CodePushConfig current] appVersion];
+    NSDictionary *currentPackageMetadata = [CodePushPackage getCurrentPackage:&error];
+    if (error || !currentPackageMetadata) {
+        CPLog(logMessageFormat, binaryBundleURL);
+        isRunningBinaryVersion = YES;
+        return binaryBundleURL;
+    }
+
+    NSString *packageDate = [currentPackageMetadata objectForKey:BinaryBundleDateKey];
+    NSString *packageAppVersion = [currentPackageMetadata objectForKey:AppVersionKey];
+
+    if ([[CodePushUpdateUtils modifiedDateStringOfFileAtURL:binaryBundleURL] isEqualToString:packageDate] && ([CodePush isUsingTestConfiguration] ||[binaryAppVersion isEqualToString:packageAppVersion])) {
+        // Return package file because it is newer than the app store binary's JS bundle
+        NSURL *packageUrl = [[NSURL alloc] initFileURLWithPath:packageFile];
+        CPLog(logMessageFormat, packageUrl);
+        isRunningBinaryVersion = NO;
+        return packageUrl;
+    } else {
+        BOOL isRelease = NO;
+#ifndef DEBUG
+        isRelease = YES;
+#endif
+
+        if (isRelease || ![binaryAppVersion isEqualToString:packageAppVersion]) {
+            [CodePush clearUpdates];
+        }
+
+        CPLog(logMessageFormat, binaryBundleURL);
+        isRunningBinaryVersion = YES;
+        return binaryBundleURL;
+    }
+}
+*/
+
+bool CodePush::CodePush::IsUsingTestConfiguration()
+{
+    return _testConfigurationFlag;
+}
+
+void CodePush::CodePush::SetUsingTestConfiguration(bool shouldUseTestConfiguration)
+{
+    _testConfigurationFlag = shouldUseTestConfiguration;
+}
+
+fire_and_forget CodePush::CodePush::LoadBundle()
+{
     /*
     auto bundleRootPath = m_host.InstanceSettings().BundleRootPath();
     OutputDebugStringW((L"BundleRootPath: " + bundleRootPath + L"\n").c_str());
@@ -44,11 +200,19 @@ void CodePush::CodePush::LoadBundle()
     OutputDebugStringW((L"ByteCodeFileUri: " + byteCodeFileUri + L"\n").c_str());
     */
 
+    //m_host.InstanceSettings().JavaScriptBundleFile(co_await GetJSBundleFile());
+    /*
+    if (IsUsingTestConfiguration() ||
+        std::wstring(m_host.InstanceSettings().JavaScriptBundleFile().c_str()).rfind(L"http", 0) == std::wstring::npos)
+    {
+        m_host.InstanceSettings().JavaScriptBundleFile(co_await GetJSBundleFile());
+    }
+    */
+
     m_host.InstanceSettings().UIDispatcher().Post([host = m_host]() {
-        host.ReloadInstance(); 
-        //OutputDebugStringW(L"What's up?");
-        //host.PackageProviders().Append(winrt::make<winrt::CodePushDemoAppCpp::implementation::ReactPackageProvider>());
+        host.ReloadInstance();
     });
+    co_return;
 }
 
 /*
@@ -180,7 +344,6 @@ winrt::fire_and_forget CodePush::CodePush::GetUpdateMetadata(CodePushUpdateState
         // ...
         auto currentUpdateIsPending = IsPendingUpdate(currentPackage.GetObject().GetNamedString(PackageHashKey));
 
-
         //promise.Resolve(currentPackage);
         promise.Resolve(JSValue::Null);
     }
@@ -310,3 +473,160 @@ void CodePush::CodePush::NotifyApplicationReady(ReactPromise<JSValue>&& promise)
         promise.Reject(e.what());
     }
 }
+
+void CodePush::CodePush::Allow(ReactPromise<JSValue>&& promise) noexcept
+{
+    CodePushUtils::Log(L"Re-allowing restarts");
+    _allowed = true;
+
+    if (_restartQueue.size() > 0)
+    {
+        CodePushUtils::Log(L"Executing pending restart");
+        auto buf = _restartQueue[0];
+        _restartQueue.erase(_restartQueue.begin());
+        RestartAppInternal(buf);
+    }
+
+    promise.Resolve(JSValue::Null);
+}
+
+/*
+@ReactMethod
+    public void allow(Promise promise) {
+        CodePushUtils.log("Re-allowing restarts");
+        this._allowed = true;
+
+        if (_restartQueue.size() > 0) {
+            CodePushUtils.log("Executing pending restart");
+            boolean buf = this._restartQueue.get(0);
+            this._restartQueue.remove(0);
+            this.restartAppInternal(buf);
+        }
+
+        promise.resolve(null);
+        return;
+    }
+*/
+
+void CodePush::CodePush::Disallow(ReactPromise<JSValue>&& promise) noexcept
+{
+    CodePushUtils::Log(L"Disallowing restarts");
+    _allowed = false;
+    promise.Resolve(JSValue::Null);
+}
+
+/*
+@ReactMethod
+    public void disallow(Promise promise) {
+        CodePushUtils.log("Disallowing restarts");
+        this._allowed = false;
+        promise.resolve(null);
+        return;
+    }
+*/
+
+
+const std::wstring BinaryModifiedTimeKey = L"";
+
+long GetBinaryResourcesModifiedTime()
+{
+    std::wstring packagename = L"PackageName";
+    int codePushApkBuildTimeId = -1;
+    std::wstring CodePushApkBuildTime = L"";
+    //return static_cast<long>(CodePushApkBuildTime);
+    return -1;
+}
+/*
+long getBinaryResourcesModifiedTime() {
+        try {
+            String packageName = this.mContext.getPackageName();
+            int codePushApkBuildTimeId = this.mContext.getResources().getIdentifier(CodePushConstants.CODE_PUSH_APK_BUILD_TIME_KEY, "string", packageName);
+            // replace double quotes needed for correct restoration of long value from strings.xml
+            // https://github.com/microsoft/cordova-plugin-code-push/issues/264
+            String codePushApkBuildTime = this.mContext.getResources().getString(codePushApkBuildTimeId).replaceAll("\"","");
+            return Long.parseLong(codePushApkBuildTime);
+        } catch (Exception e) {
+            throw new CodePushUnknownException("Error in getting binary resources modified time", e);
+        }
+    }
+*/
+
+void DownloadUpdate(JSValue&& updatePackage, bool notifyProgress, ReactPromise<JSValue>&& promise) noexcept
+{
+    JsonObject mutableUpdatePackage;
+    updatePackage[BinaryModifiedTimeKey] = GetBinaryResourcesModifiedTime();
+}
+
+/*
+@ReactMethod
+    public void downloadUpdate(final ReadableMap updatePackage, final boolean notifyProgress, final Promise promise) {
+        AsyncTask<Void, Void, Void> asyncTask = new AsyncTask<Void, Void, Void>() {
+            @Override
+            protected Void doInBackground(Void... params) {
+                try {
+                    JSONObject mutableUpdatePackage = CodePushUtils.convertReadableToJsonObject(updatePackage);
+                    CodePushUtils.setJSONValueForKey(mutableUpdatePackage, CodePushConstants.BINARY_MODIFIED_TIME_KEY, "" + mCodePush.getBinaryResourcesModifiedTime());
+                    mUpdateManager.downloadPackage(mutableUpdatePackage, mCodePush.getAssetsBundleFileName(), new DownloadProgressCallback() {
+                        private boolean hasScheduledNextFrame = false;
+                        private DownloadProgress latestDownloadProgress = null;
+
+                        @Override
+                        public void call(DownloadProgress downloadProgress) {
+                            if (!notifyProgress) {
+                                return;
+                            }
+
+                            latestDownloadProgress = downloadProgress;
+                            // If the download is completed, synchronously send the last event.
+                            if (latestDownloadProgress.isCompleted()) {
+                                dispatchDownloadProgressEvent();
+                                return;
+                            }
+
+                            if (hasScheduledNextFrame) {
+                                return;
+                            }
+
+                            hasScheduledNextFrame = true;
+                            getReactApplicationContext().runOnUiQueueThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    ReactChoreographer.getInstance().postFrameCallback(ReactChoreographer.CallbackType.TIMERS_EVENTS, new ChoreographerCompat.FrameCallback() {
+                                        @Override
+                                        public void doFrame(long frameTimeNanos) {
+                                            if (!latestDownloadProgress.isCompleted()) {
+                                                dispatchDownloadProgressEvent();
+                                            }
+
+                                            hasScheduledNextFrame = false;
+                                        }
+                                    });
+                                }
+                            });
+                        }
+
+                        public void dispatchDownloadProgressEvent() {
+                            getReactApplicationContext()
+                                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                                    .emit(CodePushConstants.DOWNLOAD_PROGRESS_EVENT_NAME, latestDownloadProgress.createWritableMap());
+                        }
+                    }, mCodePush.getPublicKey());
+
+                    JSONObject newPackage = mUpdateManager.getPackage(CodePushUtils.tryGetString(updatePackage, CodePushConstants.PACKAGE_HASH_KEY));
+                    promise.resolve(CodePushUtils.convertJsonObjectToWritable(newPackage));
+                } catch (CodePushInvalidUpdateException e) {
+                    CodePushUtils.log(e);
+                    mSettingsManager.saveFailedUpdate(CodePushUtils.convertReadableToJsonObject(updatePackage));
+                    promise.reject(e);
+                } catch (IOException | CodePushUnknownException e) {
+                    CodePushUtils.log(e);
+                    promise.reject(e);
+                }
+
+                return null;
+            }
+        };
+
+        asyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+*/

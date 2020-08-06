@@ -7,9 +7,10 @@
 
 #include <filesystem>
 
-using namespace winrt::Windows::Data::Json;
-using namespace winrt::Windows::Foundation;
-using namespace winrt::Windows::Storage;
+using namespace winrt;
+using namespace Windows::Data::Json;
+using namespace Windows::Foundation;
+using namespace Windows::Storage;
 
 using namespace std;
 using namespace filesystem;
@@ -109,6 +110,11 @@ IAsyncOperation<IJsonValue> GetPackage(winrt::hstring& packageHash)
 }
 */
 
+IAsyncOperation<hstring> CodePush::CodePushPackage::GetCurrentPackageFolderPath()
+{
+	co_return L"";
+}
+
 IAsyncOperation<IJsonValue> CodePush::CodePushPackage::GetCurrentPackage()
 {
 	auto packageHash = co_await GetCurrentPackageHash();
@@ -119,3 +125,36 @@ IAsyncOperation<IJsonValue> CodePush::CodePushPackage::GetCurrentPackage()
 
 	co_return co_await GetPackage(packageHash);
 }
+
+
+IAsyncOperation<hstring> CodePush::CodePushPackage::GetCurrentPackageBundlePath(hstring bundleFileName)
+{
+	auto packageFolder = co_await GetCurrentPackageFolderPath();
+	if (packageFolder.empty())
+	{
+		co_return L"";
+	}
+
+	auto currentPackage = co_await GetCurrentPackage();
+	co_return L"";
+}
+/*
+public String getCurrentPackageBundlePath(String bundleFileName) {
+		String packageFolder = getCurrentPackageFolderPath();
+		if (packageFolder == null) {
+			return null;
+		}
+
+		JSONObject currentPackage = getCurrentPackage();
+		if (currentPackage == null) {
+			return null;
+		}
+
+		String relativeBundlePath = currentPackage.optString(CodePushConstants.RELATIVE_BUNDLE_PATH_KEY, null);
+		if (relativeBundlePath == null) {
+			return CodePushUtils.appendPathComponent(packageFolder, bundleFileName);
+		} else {
+			return CodePushUtils.appendPathComponent(packageFolder, relativeBundlePath);
+		}
+	}
+*/

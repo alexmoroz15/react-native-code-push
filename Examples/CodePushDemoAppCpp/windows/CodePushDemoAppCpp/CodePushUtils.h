@@ -8,5 +8,6 @@ namespace CodePush
 	{
 		static void Log(std::wstring message);
 		static void Log(std::exception error);
+		static void LogBundleUrl(std::wstring path);
 	};
 }

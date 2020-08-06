@@ -2,6 +2,8 @@
 
 #include "NativeModules.h"
 
+//#include <filesystem>
+
 namespace CodePush
 {
 	enum class CodePushUpdateState
@@ -19,6 +21,8 @@ namespace CodePush
 
 		const std::wstring PendingUpdateHashKey{ L"hash" };
 		const std::wstring PendingUpdateIsLoadingKey{ L"isLoading" };
+		const winrt::hstring DefaultJSBundleName{ L"index.windows" };
+		const winrt::hstring AssetsBundlePrefix{ L"ms-appx:///" };
 		/*
 		// These constants represent emitted events
 		static NSString* const DownloadProgressEvent = @"CodePushDownloadProgress";
@@ -46,14 +50,23 @@ namespace CodePush
 
 		bool _allowed{ true };
 		bool _restartInProgress{ false };
-		std::vector<bool> _restartQueue;
-
-		void LoadBundle();
-		void RestartAppInternal(bool onlyIfUpdateIsPending);
-		bool IsPendingUpdate(winrt::hstring&& updateHash);
+		static inline bool _testConfigurationFlag{ false };
+		std::vector<uint8_t> _restartQueue;
 
 		winrt::Microsoft::ReactNative::ReactNativeHost m_host;
 		winrt::Microsoft::ReactNative::ReactInstanceSettings m_instance;
+		winrt::hstring m_assetsBundleFileName;
+
+		static bool IsUsingTestConfiguration();
+		static void SetUsingTestConfiguration(bool shouldUseTestConfiguration);
+
+		winrt::fire_and_forget LoadBundle();
+		void RestartAppInternal(bool onlyIfUpdateIsPending);
+		bool IsPendingUpdate(winrt::hstring&& updateHash);
+
+		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile();
+		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile(winrt::hstring assetsBundleFileName);
+
 
 	public:
 		/*
@@ -87,6 +100,13 @@ namespace CodePush
 			//host.ReloadInstance();
 		}
 		*/
+		
+		REACT_METHOD(Allow, L"allow")
+		void Allow(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
+
+		REACT_METHOD(Disallow, L"disallow")
+		void Disallow(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
+
 
 		REACT_METHOD(GetNewStatusReport, L"getNewStatusReport")
 		void GetNewStatusReport(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
@@ -99,5 +119,8 @@ namespace CodePush
 
 		REACT_METHOD(NotifyApplicationReady, L"notifyApplicationReady")
 		void NotifyApplicationReady(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
+
+		REACT_METHOD(DownloadUpdate, L"downloadUpdate")
+			void DownloadUpdate(winrt::Microsoft::ReactNative::ReactPromise < winrt::Microsoft::ReactNative::JSValue&& promise) noexcept;
 	};
 }
