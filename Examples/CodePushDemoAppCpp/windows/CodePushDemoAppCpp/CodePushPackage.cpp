@@ -36,6 +36,8 @@ path GetStatusFilePath()
 
 IAsyncOperation<IJsonValue> GetCurrentPackageInfo()
 {
+	co_return JsonValue::CreateNullValue();
+	/*
 	try
 	{
 		auto statusFilePath = GetStatusFilePath();
@@ -49,6 +51,7 @@ IAsyncOperation<IJsonValue> GetCurrentPackageInfo()
 		OutputDebugStringW(L"Error has occurred.\n");
 		co_return JsonValue::CreateNullValue();
 	}
+	*/
 }
 
 IAsyncOperation<winrt::hstring> GetCurrentPackageHash()

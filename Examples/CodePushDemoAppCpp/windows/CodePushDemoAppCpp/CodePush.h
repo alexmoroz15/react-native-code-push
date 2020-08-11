@@ -54,8 +54,10 @@ namespace CodePush
 		std::vector<uint8_t> _restartQueue;
 
 		winrt::Microsoft::ReactNative::ReactNativeHost m_host;
-		winrt::Microsoft::ReactNative::ReactInstanceSettings m_instance;
+		//winrt::Microsoft::ReactNative::ReactInstanceSettings m_instance;
 		winrt::hstring m_assetsBundleFileName;
+		winrt::hstring m_ClientUniqueId;
+		std::string m_BinaryContentsHash{ "" };
 
 		static bool IsUsingTestConfiguration();
 		static void SetUsingTestConfiguration(bool shouldUseTestConfiguration);
@@ -80,47 +82,62 @@ namespace CodePush
 			const int CodePushInstallModeOnNextSuspend{ CodePushInstallMode::OnNextSuspend };
 		*/
 
-		std::wstring GetApplicationSupportDirectory()
-		{
+		//std::wstring GetApplicationSupportDirectory();
 
+		enum class CodePushInstallMode
+		{
+			IMMEDIATE = 0,
+			ON_NEXT_RESTART = 1,
+			ON_NEXT_RESUME = 2,
+			ON_NEXT_SUSPEND = 3
+		};
+
+		enum class CodePushUpdateState
+		{
+			RUNNING = 0,
+			PENDING = 1,
+			LATEST = 2
+		};
+
+		REACT_CONSTANT_PROVIDER(GetConstants);
+		void GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
+		{
+			constants.Add(L"codePushInstallModeImmediate", CodePushInstallMode::IMMEDIATE);
+			constants.Add(L"codePushInstallModeOnNextRestart", CodePushInstallMode::ON_NEXT_RESTART);
+			constants.Add(L"codePushInstallModeOnNextResume", CodePushInstallMode::ON_NEXT_RESUME);
+			constants.Add(L"codePushInstallModeOnNextSuspend", CodePushInstallMode::ON_NEXT_SUSPEND);
+
+			constants.Add(L"codePushUpdateStateRunning", CodePushUpdateState::RUNNING);
+			constants.Add(L"codePushUpdateStatePending", CodePushUpdateState::PENDING);
+			constants.Add(L"codePushUpdateStateLatest", CodePushUpdateState::LATEST);
 		}
 
-		REACT_INIT(Initialize)
+		REACT_INIT(Initialize);
 		void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;
-		/*
-		{
-			using namespace winrt::Microsoft::ReactNative;
-
-			//auto res = reactContext.Properties().Handle().Get(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
-			auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
-			auto host = res.as<ReactNativeHost>();
-			m_host = host;
-			OutputDebugStringW((host.InstanceSettings().JavaScriptBundleFile() + L"\n").c_str());
-			//host.InstanceSettings().JavaScriptBundleFile(L"");
-			//host.ReloadInstance();
-		}
-		*/
 		
-		REACT_METHOD(Allow, L"allow")
+
+		REACT_METHOD(Allow, L"allow");
 		void Allow(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
-		REACT_METHOD(Disallow, L"disallow")
+		REACT_METHOD(Disallow, L"disallow");
 		void Disallow(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
+		REACT_METHOD(GetConfiguration, L"getConfiguration");
+		void GetConfiguration(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
-		REACT_METHOD(GetNewStatusReport, L"getNewStatusReport")
-		void GetNewStatusReport(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
+		REACT_METHOD(GetNewStatusReport, L"getNewStatusReport");
+		void GetNewStatusReport(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
-		REACT_METHOD(GetUpdateMetadata, L"getUpdateMetadata")
+		REACT_METHOD(GetUpdateMetadata, L"getUpdateMetadata");
 		winrt::fire_and_forget GetUpdateMetadata(CodePushUpdateState updateState, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
 
-		REACT_METHOD(RestartApp, L"restartApp")
+		REACT_METHOD(RestartApp, L"restartApp");
 		void RestartApp(bool onlyIfUpdateIsPending, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
-		REACT_METHOD(NotifyApplicationReady, L"notifyApplicationReady")
+		REACT_METHOD(NotifyApplicationReady, L"notifyApplicationReady");
 		void NotifyApplicationReady(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
-		REACT_METHOD(DownloadUpdate, L"downloadUpdate")
-			void DownloadUpdate(winrt::Microsoft::ReactNative::ReactPromise < winrt::Microsoft::ReactNative::JSValue&& promise) noexcept;
+		REACT_METHOD(DownloadUpdate, L"downloadUpdate");
+		void DownloadUpdate(winrt::Microsoft::ReactNative::JSValue&& updatePackage, bool notifyProgress, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 	};
 }

@@ -6,6 +6,8 @@
 #include "App.h"
 
 #include <winrt/Windows.Data.Json.h>
+#include <winrt/Windows.Web.Http.h>
+#include <winrt/Windows.Storage.Streams.h>
 
 #include <exception>
 #include <filesystem>
@@ -16,8 +18,11 @@
 using namespace winrt;
 using namespace Microsoft::ReactNative;
 using namespace Windows::Data::Json;
-using namespace std::filesystem;
+using namespace Windows::Web::Http;
+using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation;
+
+using namespace std::filesystem;
 
 const hstring PackageHashKey{ L"packageHash" };
 
@@ -295,8 +300,15 @@ void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
     //reactContext.Properties().Get(ReactPropertyBag::Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), nullptr), nullptr);
     //reactContext.Properties().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), nullptr);
     //reactContext.Properties().Get(ReactPropertyBag::Handle
-    
     m_host = g_host;
+
+    //file = L"CodePushHash";
+    /*
+    auto file = co_await StorageFile::GetFileFromPathAsync(updateMetadataFilePath.c_str());
+    auto content = co_await FileIO::ReadTextAsync(file);
+    auto json = JsonObject::Parse(content);
+    */
+    //m_BinaryContentsHash;
     //m_instance = g_instanceSettings;
 }
 
@@ -325,7 +337,93 @@ bool CodePush::CodePush::IsPendingUpdate(winrt::hstring&& packageHash)
     }
 }
 
-void CodePush::CodePush::GetNewStatusReport(ReactPromise<JSValue> promise) noexcept
+std::string GetServerUrl()
+{
+    return "";
+}
+
+std::string GetDeploymentKey()
+{
+    return "";
+}
+
+std::string GetAppVersion()
+{
+    return "";
+}
+
+void CodePush::CodePush::GetConfiguration(ReactPromise<JSValue>&& promise) noexcept
+{
+    JSValueObject configMap = JSValueObject{};
+    configMap["appVersion"] = GetAppVersion();
+    configMap["deploymentKey"] = GetDeploymentKey();
+    configMap["serverUrl"] = GetServerUrl();
+
+    if (!m_BinaryContentsHash.empty())
+    {
+        configMap["packageHash"] = m_BinaryContentsHash;
+    }
+
+    
+    promise.Resolve(std::move(configMap));
+}
+/*
+@ReactMethod
+    public void getConfiguration(Promise promise) {
+        try {
+            WritableMap configMap =  Arguments.createMap();
+            configMap.putString("appVersion", mCodePush.getAppVersion());
+            configMap.putString("clientUniqueId", mClientUniqueId);
+            configMap.putString("deploymentKey", mCodePush.getDeploymentKey());
+            configMap.putString("serverUrl", mCodePush.getServerUrl());
+
+            // The binary hash may be null in debug builds
+            if (mBinaryContentsHash != null) {
+                configMap.putString(CodePushConstants.PACKAGE_HASH_KEY, mBinaryContentsHash);
+            }
+
+            promise.resolve(configMap);
+        } catch(CodePushUnknownException e) {
+            CodePushUtils.log(e);
+            promise.reject(e);
+        }
+    }
+*/
+
+/*
+RCT_EXPORT_METHOD(getConfiguration:(RCTPromiseResolveBlock)resolve
+                          rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *configuration = [[CodePushConfig current] configuration];
+    NSError *error;
+    if (isRunningBinaryVersion) {
+        // isRunningBinaryVersion will not get set to "YES" if running against the packager.
+        NSString *binaryHash = [CodePushUpdateUtils getHashForBinaryContents:[CodePush binaryBundleURL] error:&error];
+        if (error) {
+            CPLog(@"Error obtaining hash for binary contents: %@", error);
+            resolve(configuration);
+            return;
+        }
+
+        if (binaryHash == nil) {
+            // The hash was not generated either due to a previous unknown error or the fact that
+            // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
+            // builds.
+            resolve(configuration);
+            return;
+        }
+
+        NSMutableDictionary *mutableConfiguration = [configuration mutableCopy];
+        [mutableConfiguration setObject:binaryHash forKey:PackageHashKey];
+        resolve(mutableConfiguration);
+        return;
+    }
+
+    resolve(configuration);
+}
+*/
+
+void CodePush::CodePush::GetNewStatusReport(ReactPromise<JSValue>&& promise) noexcept
 {
     promise.Resolve(JSValue::Null);
 }
@@ -551,10 +649,23 @@ long getBinaryResourcesModifiedTime() {
     }
 */
 
-void DownloadUpdate(JSValue&& updatePackage, bool notifyProgress, ReactPromise<JSValue>&& promise) noexcept
+void CodePush::CodePush::DownloadUpdate(JSValue&& updatePackage, bool notifyProgress, ReactPromise<JSValue>&& promise) noexcept
 {
     JsonObject mutableUpdatePackage;
-    updatePackage[BinaryModifiedTimeKey] = GetBinaryResourcesModifiedTime();
+    
+    //updatePackage[BinaryModifiedTimeKey] = GetBinaryResourcesModifiedTime();
+    /*
+    HttpClient foo;
+    auto bar = foo.GetInputStreamAsync(Uri(L"http://foo"));
+    auto a = bar.Progress();
+    //a(auto b, auto c);
+    auto b = bar.Status();
+    auto c = bar.get();
+    auto d = Buffer{ nullptr };
+    c.ReadAsync(d, 8, InputStreamOptions()).Completed([](){
+    
+    });
+    */
 }
 
 /*
