@@ -7,7 +7,9 @@
 
 #include <winrt/Windows.Data.Json.h>
 #include <winrt/Windows.Web.Http.h>
+#include <winrt/Windows.Web.Http.Headers.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Storage.Compression.h>
 
 #include <exception>
 #include <filesystem>
@@ -19,6 +21,8 @@ using namespace winrt;
 using namespace Microsoft::ReactNative;
 using namespace Windows::Data::Json;
 using namespace Windows::Web::Http;
+using namespace Windows::Storage;
+using namespace Windows::Storage::Compression;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation;
 
@@ -31,24 +35,6 @@ bool IsPackageBundleLatest(IJsonValue packageMetadata)
     // idk
     return false;
 }
-/*
-private boolean isPackageBundleLatest(JSONObject packageMetadata) {
-        try {
-            Long binaryModifiedDateDuringPackageInstall = null;
-            String binaryModifiedDateDuringPackageInstallString = packageMetadata.optString(CodePushConstants.BINARY_MODIFIED_TIME_KEY, null);
-            if (binaryModifiedDateDuringPackageInstallString != null) {
-                binaryModifiedDateDuringPackageInstall = Long.parseLong(binaryModifiedDateDuringPackageInstallString);
-            }
-            String packageAppVersion = packageMetadata.optString("appVersion", null);
-            long binaryResourcesModifiedTime = this.getBinaryResourcesModifiedTime();
-            return binaryModifiedDateDuringPackageInstall != null &&
-                    binaryModifiedDateDuringPackageInstall == binaryResourcesModifiedTime &&
-                    (isUsingTestConfiguration() || sAppVersion.equals(packageAppVersion));
-        } catch (NumberFormatException e) {
-            throw new CodePushUnknownException("Error in reading binary modified date from package metadata", e);
-        }
-    }
-*/
 
 IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile()
 {
@@ -82,104 +68,6 @@ IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile(hstring assetsBundl
     }
 }
 
-/*
-public String getJSBundleFileInternal(String assetsBundleFileName) {
-        this.mAssetsBundleFileName = assetsBundleFileName;
-        String binaryJsBundleUrl = CodePushConstants.ASSETS_BUNDLE_PREFIX + assetsBundleFileName;
-
-        String packageFilePath = null;
-        try {
-            packageFilePath = mUpdateManager.getCurrentPackageBundlePath(this.mAssetsBundleFileName);
-        } catch (CodePushMalformedDataException e) {
-            // We need to recover the app in case 'codepush.json' is corrupted
-            CodePushUtils.log(e.getMessage());
-            clearUpdates();
-        }
-
-        if (packageFilePath == null) {
-            // There has not been any downloaded updates.
-            CodePushUtils.logBundleUrl(binaryJsBundleUrl);
-            sIsRunningBinaryVersion = true;
-            return binaryJsBundleUrl;
-        }
-
-        JSONObject packageMetadata = this.mUpdateManager.getCurrentPackage();
-        if (isPackageBundleLatest(packageMetadata)) {
-            CodePushUtils.logBundleUrl(packageFilePath);
-            sIsRunningBinaryVersion = false;
-            return packageFilePath;
-        } else {
-            // The binary version is newer.
-            this.mDidUpdate = false;
-            if (!this.mIsDebugMode || hasBinaryVersionChanged(packageMetadata)) {
-                this.clearUpdates();
-            }
-
-            CodePushUtils.logBundleUrl(binaryJsBundleUrl);
-            sIsRunningBinaryVersion = true;
-            return binaryJsBundleUrl;
-        }
-    }
-*/
-/*
-+ (NSURL *)bundleURLForResource:(NSString *)resourceName
-                  withExtension:(NSString *)resourceExtension
-                   subdirectory:(NSString *)resourceSubdirectory
-                         bundle:(NSBundle *)resourceBundle
-{
-    bundleResourceName = resourceName;
-    bundleResourceExtension = resourceExtension;
-    bundleResourceSubdirectory = resourceSubdirectory;
-    bundleResourceBundle = resourceBundle;
-
-    [self ensureBinaryBundleExists];
-
-    NSString *logMessageFormat = @"Loading JS bundle from %@";
-
-    NSError *error;
-    NSString *packageFile = [CodePushPackage getCurrentPackageBundlePath:&error];
-    NSURL *binaryBundleURL = [self binaryBundleURL];
-
-    if (error || !packageFile) {
-        CPLog(logMessageFormat, binaryBundleURL);
-        isRunningBinaryVersion = YES;
-        return binaryBundleURL;
-    }
-
-    NSString *binaryAppVersion = [[CodePushConfig current] appVersion];
-    NSDictionary *currentPackageMetadata = [CodePushPackage getCurrentPackage:&error];
-    if (error || !currentPackageMetadata) {
-        CPLog(logMessageFormat, binaryBundleURL);
-        isRunningBinaryVersion = YES;
-        return binaryBundleURL;
-    }
-
-    NSString *packageDate = [currentPackageMetadata objectForKey:BinaryBundleDateKey];
-    NSString *packageAppVersion = [currentPackageMetadata objectForKey:AppVersionKey];
-
-    if ([[CodePushUpdateUtils modifiedDateStringOfFileAtURL:binaryBundleURL] isEqualToString:packageDate] && ([CodePush isUsingTestConfiguration] ||[binaryAppVersion isEqualToString:packageAppVersion])) {
-        // Return package file because it is newer than the app store binary's JS bundle
-        NSURL *packageUrl = [[NSURL alloc] initFileURLWithPath:packageFile];
-        CPLog(logMessageFormat, packageUrl);
-        isRunningBinaryVersion = NO;
-        return packageUrl;
-    } else {
-        BOOL isRelease = NO;
-#ifndef DEBUG
-        isRelease = YES;
-#endif
-
-        if (isRelease || ![binaryAppVersion isEqualToString:packageAppVersion]) {
-            [CodePush clearUpdates];
-        }
-
-        CPLog(logMessageFormat, binaryBundleURL);
-        isRunningBinaryVersion = YES;
-        return binaryBundleURL;
-    }
-}
-*/
-
 bool CodePush::CodePush::IsUsingTestConfiguration()
 {
     return _testConfigurationFlag;
@@ -205,223 +93,33 @@ fire_and_forget CodePush::CodePush::LoadBundle()
     OutputDebugStringW((L"ByteCodeFileUri: " + byteCodeFileUri + L"\n").c_str());
     */
 
-    //m_host.InstanceSettings().JavaScriptBundleFile(co_await GetJSBundleFile());
-    /*
-    if (IsUsingTestConfiguration() ||
-        std::wstring(m_host.InstanceSettings().JavaScriptBundleFile().c_str()).rfind(L"http", 0) == std::wstring::npos)
-    {
-        m_host.InstanceSettings().JavaScriptBundleFile(co_await GetJSBundleFile());
-    }
-    */
-
+    //auto installedLocation{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
+    //m_host.InstanceSettings().BundleRootPath(installedLocation.Path() + L"\\Assets\\");
+    //m_host.InstanceSettings().JavaScriptBundleFile(L"index.windows");
     m_host.InstanceSettings().UIDispatcher().Post([host = m_host]() {
         host.ReloadInstance();
     });
     co_return;
 }
 
-/*
-    private void loadBundle() {
-        clearLifecycleEventListener();
-        try {
-            mCodePush.clearDebugCacheIfNeeded(resolveInstanceManager());
-        } catch(Exception e) {
-            // If we got error in out reflection we should clear debug cache anyway.
-            mCodePush.clearDebugCacheIfNeeded(null);
-        }
-
-        try {
-            // #1) Get the ReactInstanceManager instance, which is what includes the
-            //     logic to reload the current React context.
-            final ReactInstanceManager instanceManager = resolveInstanceManager();
-            if (instanceManager == null) {
-                return;
-            }
-
-            String latestJSBundleFile = mCodePush.getJSBundleFileInternal(mCodePush.getAssetsBundleFileName());
-
-            // #2) Update the locally stored JS bundle file path
-            setJSBundle(instanceManager, latestJSBundleFile);
-
-            // #3) Get the context creation method and fire it on the UI thread (which RN enforces)
-            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        // We don't need to resetReactRootViews anymore
-                        // due the issue https://github.com/facebook/react-native/issues/14533
-                        // has been fixed in RN 0.46.0
-                        //resetReactRootViews(instanceManager);
-
-                        instanceManager.recreateReactContextInBackground();
-                        mCodePush.initializeUpdateAfterRestart();
-                    } catch (Exception e) {
-                        // The recreation method threw an unknown exception
-                        // so just simply fallback to restarting the Activity (if it exists)
-                        loadBundleLegacy();
-                    }
-                }
-            });
-
-        } catch (Exception e) {
-            // Our reflection logic failed somewhere
-            // so fall back to restarting the Activity (if it exists)
-            CodePushUtils.log("Failed to load the bundle, falling back to restarting the Activity (if it exists). " + e.getMessage());
-            loadBundleLegacy();
-        }
-    }
-*/
-
-/*
-- (void)loadBundle
-{
-    // This needs to be async dispatched because the bridge is not set on init
-    // when the app first starts, therefore rollbacks will not take effect.
-    dispatch_async(dispatch_get_main_queue(), ^{
-        // If the current bundle URL is using http(s), then assume the dev
-        // is debugging and therefore, shouldn't be redirected to a local
-        // file (since Chrome wouldn't support it). Otherwise, update
-        // the current bundle URL to point at the latest update
-        if ([CodePush isUsingTestConfiguration] || ![super.bridge.bundleURL.scheme hasPrefix:@"http"]) {
-            [super.bridge setValue:[CodePush bundleURL] forKey:@"bundleURL"];
-        }
-
-        [super.bridge reload];
-    });
-}
-*/
-
 void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
 {
-    /*
-    auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
-    m_host = res.as<ReactNativeHost>();
-    */
-    //reactContext.Properties().Get(ReactPropertyBag::Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), nullptr), nullptr);
-    //reactContext.Properties().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), nullptr);
-    //reactContext.Properties().Get(ReactPropertyBag::Handle
     m_host = g_host;
-
-    //file = L"CodePushHash";
-    /*
-    auto file = co_await StorageFile::GetFileFromPathAsync(updateMetadataFilePath.c_str());
-    auto content = co_await FileIO::ReadTextAsync(file);
-    auto json = JsonObject::Parse(content);
-    */
-    //m_BinaryContentsHash;
-    //m_instance = g_instanceSettings;
 }
 
 bool CodePush::CodePush::IsPendingUpdate(winrt::hstring&& packageHash)
 {
-    // I'm not sure if UWP has a similar local dedicated storage object
-
-    // NSUserDefaults* preferences = [NSUserDefaults standardUserDefaults];
-    // NSDictionary* pendingUpdate = [preferences objectForKey : PendingUpdateKey];
-    auto pendingUpdate = JsonObject();
-    pendingUpdate.SetNamedValue(PendingUpdateIsLoadingKey, JsonValue::CreateBooleanValue(false));
-    pendingUpdate.SetNamedValue(PendingUpdateHashKey, JsonValue::CreateStringValue(L"asdf"));
-
-    try
-    {
-        bool updateIsPending = pendingUpdate.Size() && 
-            !pendingUpdate.GetNamedBoolean(PendingUpdateIsLoadingKey) && 
-            (!packageHash.size() || pendingUpdate.GetNamedString(PendingUpdateHashKey) == packageHash);
-
-        return updateIsPending;
-    }
-    catch (...)
-    {
-        // throw new CodePushUnknownException("Unable to read pending update metadata in isPendingUpdate.", e);
-        throw;
-    }
-}
-
-std::string GetServerUrl()
-{
-    return "";
-}
-
-std::string GetDeploymentKey()
-{
-    return "";
-}
-
-std::string GetAppVersion()
-{
-    return "";
+    return false;
 }
 
 void CodePush::CodePush::GetConfiguration(ReactPromise<JSValue>&& promise) noexcept
 {
     JSValueObject configMap = JSValueObject{};
-    configMap["appVersion"] = GetAppVersion();
-    configMap["deploymentKey"] = GetDeploymentKey();
-    configMap["serverUrl"] = GetServerUrl();
-
-    if (!m_BinaryContentsHash.empty())
-    {
-        configMap["packageHash"] = m_BinaryContentsHash;
-    }
-
-    
+    configMap["appVersion"] = "1.0.0";
+    configMap["deploymentKey"] = "BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS";
+    configMap["serverUrl"] = "https://codepush.appcenter.ms/";
     promise.Resolve(std::move(configMap));
 }
-/*
-@ReactMethod
-    public void getConfiguration(Promise promise) {
-        try {
-            WritableMap configMap =  Arguments.createMap();
-            configMap.putString("appVersion", mCodePush.getAppVersion());
-            configMap.putString("clientUniqueId", mClientUniqueId);
-            configMap.putString("deploymentKey", mCodePush.getDeploymentKey());
-            configMap.putString("serverUrl", mCodePush.getServerUrl());
-
-            // The binary hash may be null in debug builds
-            if (mBinaryContentsHash != null) {
-                configMap.putString(CodePushConstants.PACKAGE_HASH_KEY, mBinaryContentsHash);
-            }
-
-            promise.resolve(configMap);
-        } catch(CodePushUnknownException e) {
-            CodePushUtils.log(e);
-            promise.reject(e);
-        }
-    }
-*/
-
-/*
-RCT_EXPORT_METHOD(getConfiguration:(RCTPromiseResolveBlock)resolve
-                          rejecter:(RCTPromiseRejectBlock)reject)
-{
-    NSDictionary *configuration = [[CodePushConfig current] configuration];
-    NSError *error;
-    if (isRunningBinaryVersion) {
-        // isRunningBinaryVersion will not get set to "YES" if running against the packager.
-        NSString *binaryHash = [CodePushUpdateUtils getHashForBinaryContents:[CodePush binaryBundleURL] error:&error];
-        if (error) {
-            CPLog(@"Error obtaining hash for binary contents: %@", error);
-            resolve(configuration);
-            return;
-        }
-
-        if (binaryHash == nil) {
-            // The hash was not generated either due to a previous unknown error or the fact that
-            // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
-            // builds.
-            resolve(configuration);
-            return;
-        }
-
-        NSMutableDictionary *mutableConfiguration = [configuration mutableCopy];
-        [mutableConfiguration setObject:binaryHash forKey:PackageHashKey];
-        resolve(mutableConfiguration);
-        return;
-    }
-
-    resolve(configuration);
-}
-*/
 
 void CodePush::CodePush::GetNewStatusReport(ReactPromise<JSValue>&& promise) noexcept
 {
@@ -430,97 +128,9 @@ void CodePush::CodePush::GetNewStatusReport(ReactPromise<JSValue>&& promise) noe
 
 winrt::fire_and_forget CodePush::CodePush::GetUpdateMetadata(CodePushUpdateState updateState, ReactPromise<JSValue> promise) noexcept
 {
-    try
-    {
-        auto currentPackage = co_await CodePushPackage::GetCurrentPackage();
-        if (currentPackage.ValueType() == JsonValueType::Null)
-        {
-            promise.Resolve(JSValue::Null);
-            co_return;
-        }
-
-        // ...
-        auto currentUpdateIsPending = IsPendingUpdate(currentPackage.GetObject().GetNamedString(PackageHashKey));
-
-        //promise.Resolve(currentPackage);
-        promise.Resolve(JSValue::Null);
-    }
-    catch (std::exception e)
-    {
-        promise.Reject(e.what());
-    }
-    //m_host.InstanceSettings().BundleRootPath();
+    promise.Resolve(JSValue::Null);
+    co_return;
 }
-
-/*
-@ReactMethod
-    public void getUpdateMetadata(final int updateState, final Promise promise) {
-        AsyncTask<Void, Void, Void> asyncTask = new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                try {
-                    JSONObject currentPackage = mUpdateManager.getCurrentPackage();
-
-                    if (currentPackage == null) {
-                        promise.resolve(null);
-                        return null;
-                    }
-
-                    Boolean currentUpdateIsPending = false;
-
-                    if (currentPackage.has(CodePushConstants.PACKAGE_HASH_KEY)) {
-                        String currentHash = currentPackage.optString(CodePushConstants.PACKAGE_HASH_KEY, null);
-                        currentUpdateIsPending = mSettingsManager.isPendingUpdate(currentHash);
-                    }
-
-                    if (updateState == CodePushUpdateState.PENDING.getValue() && !currentUpdateIsPending) {
-                        // The caller wanted a pending update
-                        // but there isn't currently one.
-                        promise.resolve(null);
-                    } else if (updateState == CodePushUpdateState.RUNNING.getValue() && currentUpdateIsPending) {
-                        // The caller wants the running update, but the current
-                        // one is pending, so we need to grab the previous.
-                        JSONObject previousPackage = mUpdateManager.getPreviousPackage();
-
-                        if (previousPackage == null) {
-                            promise.resolve(null);
-                            return null;
-                        }
-
-                        promise.resolve(CodePushUtils.convertJsonObjectToWritable(previousPackage));
-                    } else {
-                        // The current package satisfies the request:
-                        // 1) Caller wanted a pending, and there is a pending update
-                        // 2) Caller wanted the running update, and there isn't a pending
-                        // 3) Caller wants the latest update, regardless if it's pending or not
-                        if (mCodePush.isRunningBinaryVersion()) {
-                            // This only matters in Debug builds. Since we do not clear "outdated" updates,
-                            // we need to indicate to the JS side that somehow we have a current update on
-                            // disk that is not actually running.
-                            CodePushUtils.setJSONValueForKey(currentPackage, "_isDebugOnly", true);
-                        }
-
-                        // Enable differentiating pending vs. non-pending updates
-                        CodePushUtils.setJSONValueForKey(currentPackage, "isPending", currentUpdateIsPending);
-                        promise.resolve(CodePushUtils.convertJsonObjectToWritable(currentPackage));
-                    }
-                } catch (CodePushMalformedDataException e) {
-                    // We need to recover the app in case 'codepush.json' is corrupted
-                    CodePushUtils.log(e.getMessage());
-                    clearUpdates();
-                    promise.resolve(null);
-                } catch(CodePushUnknownException e) {
-                    CodePushUtils.log(e);
-                    promise.reject(e);
-                }
-
-                return null;
-            }
-        };
-
-        asyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
-*/
 
 void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
 {
@@ -588,24 +198,6 @@ void CodePush::CodePush::Allow(ReactPromise<JSValue>&& promise) noexcept
     promise.Resolve(JSValue::Null);
 }
 
-/*
-@ReactMethod
-    public void allow(Promise promise) {
-        CodePushUtils.log("Re-allowing restarts");
-        this._allowed = true;
-
-        if (_restartQueue.size() > 0) {
-            CodePushUtils.log("Executing pending restart");
-            boolean buf = this._restartQueue.get(0);
-            this._restartQueue.remove(0);
-            this.restartAppInternal(buf);
-        }
-
-        promise.resolve(null);
-        return;
-    }
-*/
-
 void CodePush::CodePush::Disallow(ReactPromise<JSValue>&& promise) noexcept
 {
     CodePushUtils::Log(L"Disallowing restarts");
@@ -613,59 +205,71 @@ void CodePush::CodePush::Disallow(ReactPromise<JSValue>&& promise) noexcept
     promise.Resolve(JSValue::Null);
 }
 
-/*
-@ReactMethod
-    public void disallow(Promise promise) {
-        CodePushUtils.log("Disallowing restarts");
-        this._allowed = false;
-        promise.resolve(null);
-        return;
-    }
-*/
-
-
-const std::wstring BinaryModifiedTimeKey = L"";
-
-long GetBinaryResourcesModifiedTime()
+winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePackage, bool notifyProgress, ReactPromise<JSValue> promise) noexcept
 {
-    std::wstring packagename = L"PackageName";
-    int codePushApkBuildTimeId = -1;
-    std::wstring CodePushApkBuildTime = L"";
-    //return static_cast<long>(CodePushApkBuildTime);
-    return -1;
-}
-/*
-long getBinaryResourcesModifiedTime() {
-        try {
-            String packageName = this.mContext.getPackageName();
-            int codePushApkBuildTimeId = this.mContext.getResources().getIdentifier(CodePushConstants.CODE_PUSH_APK_BUILD_TIME_KEY, "string", packageName);
-            // replace double quotes needed for correct restoration of long value from strings.xml
-            // https://github.com/microsoft/cordova-plugin-code-push/issues/264
-            String codePushApkBuildTime = this.mContext.getResources().getString(codePushApkBuildTimeId).replaceAll("\"","");
-            return Long.parseLong(codePushApkBuildTime);
-        } catch (Exception e) {
-            throw new CodePushUnknownException("Error in getting binary resources modified time", e);
+    //JsonObject mutableUpdatePackage = {};
+
+    auto downloadUrl{ updatePackage["downloadUrl"].AsString() };
+    uint32_t BufferSize{ 1024 };
+
+    HttpClient client;
+    auto headers{ client.DefaultRequestHeaders() };
+    headers.Append(L"Accept-Encoding", L"identity");
+
+    auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
+    auto downloadFile{ co_await storageFolder.CreateFileAsync(L"download.zip", Windows::Storage::CreationCollisionOption::ReplaceExisting) };
+
+    auto inputStream{ co_await client.GetInputStreamAsync(Uri(winrt::to_hstring(downloadUrl))) };
+    auto outputStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::ReadWrite) };
+
+    bool first{ false };
+    bool isZip{ false };
+
+    for (;;)
+    {
+        auto outputBuffer{ co_await inputStream.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
+        if (outputBuffer.Length() == 0)
+        {
+            break;
+        }
+        co_await outputStream.WriteAsync(outputBuffer);
+    }
+
+    auto inputStream2{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::Read) };
+    DataReader dataReader{ inputStream2 };
+    dataReader.LoadAsync(4);
+    auto header{ dataReader.ReadInt32() };
+    isZip = header == 0x504b0304;
+
+    if (isZip)
+    {
+        // Unpack .zip file
+        auto zipStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::Read) };
+        Decompressor foo{ zipStream };
+
+        auto decompressedFile{ co_await storageFolder.CreateFileAsync(L"decompressed", CreationCollisionOption::ReplaceExisting) };
+        auto decompressedStream{ co_await decompressedFile.OpenAsync(FileAccessMode::ReadWrite) };
+
+        for (;;)
+        {
+            auto bar{ co_await foo.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
+            if (bar.Length() == 0)
+            {
+                break;
+            }
+            co_await decompressedStream.WriteAsync(bar);
         }
     }
-*/
+    else
+    {
+        // Rename the file
+        co_await downloadFile.MoveAsync(co_await downloadFile.GetParentAsync(), L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
+    }
 
-void CodePush::CodePush::DownloadUpdate(JSValue&& updatePackage, bool notifyProgress, ReactPromise<JSValue>&& promise) noexcept
-{
-    JsonObject mutableUpdatePackage;
-    
+    promise.Resolve(JSValue::Null);
+    co_return;
+
     //updatePackage[BinaryModifiedTimeKey] = GetBinaryResourcesModifiedTime();
-    /*
-    HttpClient foo;
-    auto bar = foo.GetInputStreamAsync(Uri(L"http://foo"));
-    auto a = bar.Progress();
-    //a(auto b, auto c);
-    auto b = bar.Status();
-    auto c = bar.get();
-    auto d = Buffer{ nullptr };
-    c.ReadAsync(d, 8, InputStreamOptions()).Completed([](){
-    
-    });
-    */
 }
 
 /*
@@ -741,3 +345,8 @@ void CodePush::CodePush::DownloadUpdate(JSValue&& updatePackage, bool notifyProg
         asyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 */
+
+void CodePush::CodePush::IsFailedUpdate(std::wstring packageHash, ReactPromise<bool> promise) noexcept
+{
+    promise.Resolve(false);
+}

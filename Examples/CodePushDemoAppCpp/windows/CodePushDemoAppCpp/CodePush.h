@@ -131,6 +131,9 @@ namespace CodePush
 		REACT_METHOD(GetUpdateMetadata, L"getUpdateMetadata");
 		winrt::fire_and_forget GetUpdateMetadata(CodePushUpdateState updateState, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
 
+		REACT_METHOD(IsFailedUpdate, L"isFailedUpdate");
+		void IsFailedUpdate(std::wstring packageHash, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept;
+
 		REACT_METHOD(RestartApp, L"restartApp");
 		void RestartApp(bool onlyIfUpdateIsPending, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
@@ -138,6 +141,6 @@ namespace CodePush
 		void NotifyApplicationReady(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
 		REACT_METHOD(DownloadUpdate, L"downloadUpdate");
-		void DownloadUpdate(winrt::Microsoft::ReactNative::JSValue&& updatePackage, bool notifyProgress, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
+		winrt::fire_and_forget DownloadUpdate(winrt::Microsoft::ReactNative::JSValueObject updatePackage, bool notifyProgress, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
 	};
 }
