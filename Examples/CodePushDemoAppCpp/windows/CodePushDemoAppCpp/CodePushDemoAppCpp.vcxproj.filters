@@ -21,6 +21,9 @@
     <ClCompile Include="CodePushPackage.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
+    <ClCompile Include="..\amalgamation\miniz.c">
+      <Filter>Miniz</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -35,6 +38,9 @@
     </ClInclude>
     <ClInclude Include="CodePushPackage.h">
       <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="..\amalgamation\miniz.h">
+      <Filter>Miniz</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -69,6 +75,9 @@
     </Filter>
     <Filter Include="CodePush">
       <UniqueIdentifier>{a6cfefef-527f-4450-82e5-1fc53152a8d4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Miniz">
+      <UniqueIdentifier>{f107ad2d-e4d3-465b-bec9-fb13c2ee7b53}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

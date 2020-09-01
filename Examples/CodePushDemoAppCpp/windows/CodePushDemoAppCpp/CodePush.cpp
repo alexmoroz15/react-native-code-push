@@ -9,10 +9,11 @@
 #include <winrt/Windows.Web.Http.h>
 #include <winrt/Windows.Web.Http.Headers.h>
 #include <winrt/Windows.Storage.Streams.h>
-#include <winrt/Windows.Storage.Compression.h>
 
 #include <exception>
 #include <filesystem>
+
+#include "miniz.h"
 
 #include "AutolinkedNativeModules.g.h"
 #include "ReactPackageProvider.h"
@@ -22,7 +23,7 @@ using namespace Microsoft::ReactNative;
 using namespace Windows::Data::Json;
 using namespace Windows::Web::Http;
 using namespace Windows::Storage;
-using namespace Windows::Storage::Compression;
+//using namespace Windows::Storage::Compression;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation;
 
@@ -243,7 +244,35 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
 
     if (isZip)
     {
+
+        
+        /*
+        try
+        {
+            auto downloadFolder{ co_await storageFolder.GetFolderAsync(L"download.zip") };
+        }
+        catch (...)
+        {
+            OutputDebugStringA("Ahelp I am grief by a clown\n");
+        }
+        */
+        //auto codePushFolder{ co_await downloadFolder.GetFolderAsync(L"CodePush") };
+        //auto path{ std::filesystem::path(storageFolder.Path().c_str()) / "download.zip" / "CodePush" / "index.windows.bundle" };
+        //auto foo{ co_await StorageFile::GetFileFromPathAsync(path.c_str()) };
+
+        /*
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        auto foo{ OFSTRUCT() };
+        auto bar{ LZOpenFile(L"foo", &foo, OF_READ) };
+#endif
+*/
+        //OFSTRUCT* foo;
+        //auto bar{ LZOpenFileA };
+        //LZInit();
+
+
         // Unpack .zip file
+        /*
         auto zipStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::Read) };
         Decompressor foo{ zipStream };
 
@@ -259,6 +288,7 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
             }
             co_await decompressedStream.WriteAsync(bar);
         }
+        */
     }
     else
     {
