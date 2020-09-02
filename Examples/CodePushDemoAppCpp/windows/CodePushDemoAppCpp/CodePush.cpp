@@ -12,6 +12,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <cstdio>
 
 #include "miniz.h"
 
@@ -23,7 +24,6 @@ using namespace Microsoft::ReactNative;
 using namespace Windows::Data::Json;
 using namespace Windows::Web::Http;
 using namespace Windows::Storage;
-//using namespace Windows::Storage::Compression;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation;
 
@@ -223,9 +223,17 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     auto inputStream{ co_await client.GetInputStreamAsync(Uri(winrt::to_hstring(downloadUrl))) };
     auto outputStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::ReadWrite) };
 
-    bool first{ false };
-    bool isZip{ false };
-
+    //bool first{ false };
+    //bool isZip{ false };
+    bool isZip{ true };
+    /*
+    DataReader dr{ inputStream };
+    dr.LoadAsync(4);
+    auto header{ dr.ReadInt32() };
+    isZip = header == 0x504b0304;
+    dr.DetachStream();
+    dr.Close();
+    */
     for (;;)
     {
         auto outputBuffer{ co_await inputStream.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
@@ -236,59 +244,74 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         co_await outputStream.WriteAsync(outputBuffer);
     }
 
+    inputStream.Close();
+    outputStream.Close();
+    /*
     auto inputStream2{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::Read) };
     DataReader dataReader{ inputStream2 };
     dataReader.LoadAsync(4);
     auto header{ dataReader.ReadInt32() };
     isZip = header == 0x504b0304;
-
+    inputStream2.Close();
+    */
     if (isZip)
     {
-
-        
+        auto unzippedFolderName{ L"unzipped" };
+        auto unzippedFolder = co_await storageFolder.CreateFolderAsync(unzippedFolderName, CreationCollisionOption::ReplaceExisting);
         /*
-        try
-        {
-            auto downloadFolder{ co_await storageFolder.GetFolderAsync(L"download.zip") };
-        }
-        catch (...)
-        {
-            OutputDebugStringA("Ahelp I am grief by a clown\n");
-        }
+        auto p{ path(to_string(storageFolder.Path())) / "download.zip" };
+        auto n{ to_string(hstring(p.wstring())).c_str() };
         */
-        //auto codePushFolder{ co_await downloadFolder.GetFolderAsync(L"CodePush") };
-        //auto path{ std::filesystem::path(storageFolder.Path().c_str()) / "download.zip" / "CodePush" / "index.windows.bundle" };
-        //auto foo{ co_await StorageFile::GetFileFromPathAsync(path.c_str()) };
+        auto zipName{ (to_string(storageFolder.Path()) + "\\download.zip") };
 
-        /*
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        auto foo{ OFSTRUCT() };
-        auto bar{ LZOpenFile(L"foo", &foo, OF_READ) };
-#endif
-*/
-        //OFSTRUCT* foo;
-        //auto bar{ LZOpenFileA };
-        //LZInit();
+        mz_bool status;
+        mz_zip_archive zip_archive;
+        mz_zip_zero_struct(&zip_archive);
 
+        status = mz_zip_reader_init_file(&zip_archive, zipName.c_str(), 0);
+        auto numFiles{ mz_zip_reader_get_num_files(&zip_archive) };
 
-        // Unpack .zip file
-        /*
-        auto zipStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::Read) };
-        Decompressor foo{ zipStream };
-
-        auto decompressedFile{ co_await storageFolder.CreateFileAsync(L"decompressed", CreationCollisionOption::ReplaceExisting) };
-        auto decompressedStream{ co_await decompressedFile.OpenAsync(FileAccessMode::ReadWrite) };
-
-        for (;;)
+        for (mz_uint i = 0; i < numFiles; i++)
         {
-            auto bar{ co_await foo.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
-            if (bar.Length() == 0)
+            mz_zip_archive_file_stat file_stat;
+            status = mz_zip_reader_file_stat(&zip_archive, i, &file_stat);
+            if (mz_zip_reader_is_file_a_directory(&zip_archive, i))
             {
-                break;
+                //StorageFolder::CreateFolderAsync((path(storageFolder.Path().c_str()) / unzippedName / file_stat.m_filename).c_str());
             }
-            co_await decompressedStream.WriteAsync(bar);
+            else
+            {
+                auto fileName{ file_stat.m_filename };
+                auto filePath{ path(fileName) };
+                auto filePathName{ filePath.filename() };
+                auto filePathNameString{ filePathName.string() };
+
+                // Current issue: cstdio is only allowed for read operations. 
+                // I will have to use winrt async operations to write to a file.
+
+                //auto pFile{ fopen(filePathNameString.c_str(), "w") };
+                /*
+                FILE* pFile{ nullptr };
+                auto e{ fopen_s(&pFile, filePathNameString.c_str(), "r") };
+
+                const UINT32 bufferSize{ 1024 };
+                char pBuf[bufferSize];
+                auto e2{ strerror_s(pBuf, bufferSize, e) };
+
+                status = mz_zip_reader_extract_to_cfile(&zip_archive, i, pFile, 0);
+                fclose(pFile);
+                */
+                //status = mz_zip_reader_extract_to_file(&zip_archive, i, "bla", 0);
+                //auto entryFile{ co_await unzippedFolder.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
+                /*
+                auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
+                auto os{ stream.GetOutputStreamAt(0) };
+                DataWriter dw{ os };
+                */
+            }
         }
-        */
+
+        status = mz_zip_reader_end(&zip_archive);
     }
     else
     {
@@ -300,6 +323,11 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     co_return;
 
     //updatePackage[BinaryModifiedTimeKey] = GetBinaryResourcesModifiedTime();
+}
+
+void unzip(StorageFile& zipFile, StorageFolder& destinationFolder)
+{
+
 }
 
 /*
