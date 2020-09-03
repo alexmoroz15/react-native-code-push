@@ -208,10 +208,11 @@ void CodePush::CodePush::Disallow(ReactPromise<JSValue>&& promise) noexcept
 
 winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePackage, bool notifyProgress, ReactPromise<JSValue> promise) noexcept
 {
+    
     //JsonObject mutableUpdatePackage = {};
 
     auto downloadUrl{ updatePackage["downloadUrl"].AsString() };
-    uint32_t BufferSize{ 1024 };
+    const uint32_t BufferSize{ 8 * 1024 };
 
     HttpClient client;
     auto headers{ client.DefaultRequestHeaders() };
@@ -223,17 +224,7 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     auto inputStream{ co_await client.GetInputStreamAsync(Uri(winrt::to_hstring(downloadUrl))) };
     auto outputStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::ReadWrite) };
 
-    //bool first{ false };
-    //bool isZip{ false };
     bool isZip{ true };
-    /*
-    DataReader dr{ inputStream };
-    dr.LoadAsync(4);
-    auto header{ dr.ReadInt32() };
-    isZip = header == 0x504b0304;
-    dr.DetachStream();
-    dr.Close();
-    */
     for (;;)
     {
         auto outputBuffer{ co_await inputStream.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
@@ -246,22 +237,11 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
 
     inputStream.Close();
     outputStream.Close();
-    /*
-    auto inputStream2{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::Read) };
-    DataReader dataReader{ inputStream2 };
-    dataReader.LoadAsync(4);
-    auto header{ dataReader.ReadInt32() };
-    isZip = header == 0x504b0304;
-    inputStream2.Close();
-    */
+    
     if (isZip)
     {
         auto unzippedFolderName{ L"unzipped" };
         auto unzippedFolder = co_await storageFolder.CreateFolderAsync(unzippedFolderName, CreationCollisionOption::ReplaceExisting);
-        /*
-        auto p{ path(to_string(storageFolder.Path())) / "download.zip" };
-        auto n{ to_string(hstring(p.wstring())).c_str() };
-        */
         auto zipName{ (to_string(storageFolder.Path()) + "\\download.zip") };
 
         mz_bool status;
@@ -286,28 +266,27 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
                 auto filePathName{ filePath.filename() };
                 auto filePathNameString{ filePathName.string() };
 
-                // Current issue: cstdio is only allowed for read operations. 
-                // I will have to use winrt async operations to write to a file.
-
-                //auto pFile{ fopen(filePathNameString.c_str(), "w") };
-                /*
-                FILE* pFile{ nullptr };
-                auto e{ fopen_s(&pFile, filePathNameString.c_str(), "r") };
-
-                const UINT32 bufferSize{ 1024 };
-                char pBuf[bufferSize];
-                auto e2{ strerror_s(pBuf, bufferSize, e) };
-
-                status = mz_zip_reader_extract_to_cfile(&zip_archive, i, pFile, 0);
-                fclose(pFile);
-                */
-                //status = mz_zip_reader_extract_to_file(&zip_archive, i, "bla", 0);
-                //auto entryFile{ co_await unzippedFolder.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
-                /*
+                auto entryFile{ co_await unzippedFolder.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
                 auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
                 auto os{ stream.GetOutputStreamAt(0) };
                 DataWriter dw{ os };
-                */
+
+                const auto arrBufSize = 8 * 1024;
+                std::array<uint8_t, arrBufSize> arrBuf;
+
+                mz_zip_reader_extract_iter_state* pState = mz_zip_reader_extract_iter_new(&zip_archive, i, 0);
+                UINT32 bytesRead{ 0 };
+                while (bytesRead = mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()))
+                {
+                    array_view<const uint8_t> view{ arrBuf.data(), arrBuf.data() + bytesRead };
+                    dw.WriteBytes(view);
+                }
+                status = mz_zip_reader_extract_iter_free(pState);
+                auto bar{ co_await dw.StoreAsync() };
+                auto bla{ co_await dw.FlushAsync() };
+                dw.Close();
+                os.Close();
+                stream.Close();
             }
         }
 
@@ -325,9 +304,31 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     //updatePackage[BinaryModifiedTimeKey] = GetBinaryResourcesModifiedTime();
 }
 
-void unzip(StorageFile& zipFile, StorageFolder& destinationFolder)
+IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder& source, path& relPath)
 {
+    /*
+    if (relPath.has_root_name())
+    {
+        auto root{ relPath.root_name() };
+        auto root_string{ root.string() };
+        auto item{ co_await source.TryGetItemAsync(to_hstring(root_string)) };
+        
+        StorageFolder folder{ nullptr };
+        if (item.IsOfType(StorageItemTypes::Folder))
+        {
+            folder = static_cast<StorageFolder>(item);
+        }
+        else
+        {
+            folder = co_await source.CreateFolderAsync(to_hstring(root_string));
+        }
+    }
+    else
+    {
 
+    }
+    */
+    co_return nullptr;
 }
 
 /*
