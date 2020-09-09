@@ -54,6 +54,8 @@ namespace CodePush
 		std::vector<uint8_t> _restartQueue;
 
 		winrt::Microsoft::ReactNative::ReactNativeHost m_host;
+		winrt::Microsoft::ReactNative::ReactContext m_context;
+
 		//winrt::Microsoft::ReactNative::ReactInstanceSettings m_instance;
 		winrt::hstring m_assetsBundleFileName;
 		winrt::hstring m_ClientUniqueId;

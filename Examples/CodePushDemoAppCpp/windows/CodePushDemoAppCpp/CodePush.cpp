@@ -13,6 +13,7 @@
 #include <exception>
 #include <filesystem>
 #include <cstdio>
+#include <sstream>
 
 #include "miniz.h"
 
@@ -81,22 +82,6 @@ void CodePush::CodePush::SetUsingTestConfiguration(bool shouldUseTestConfigurati
 
 fire_and_forget CodePush::CodePush::LoadBundle()
 {
-    /*
-    auto bundleRootPath = m_host.InstanceSettings().BundleRootPath();
-    OutputDebugStringW((L"BundleRootPath: " + bundleRootPath + L"\n").c_str());
-    auto debugBundlePath = m_host.InstanceSettings().DebugBundlePath();
-    OutputDebugStringW((L"DebugBundlePath: " + debugBundlePath + L"\n").c_str());
-    auto jsBundleFile = m_host.InstanceSettings().JavaScriptBundleFile();
-    OutputDebugStringW((L"JavaScriptBundleFile: " + jsBundleFile + L"\n").c_str());
-    auto jsMainModuleName = m_host.InstanceSettings().JavaScriptMainModuleName();
-    OutputDebugStringW((L"JavaScriptMainModuleName: " + jsMainModuleName + L"\n").c_str());
-    auto byteCodeFileUri = m_host.InstanceSettings().ByteCodeFileUri();
-    OutputDebugStringW((L"ByteCodeFileUri: " + byteCodeFileUri + L"\n").c_str());
-    */
-
-    //auto installedLocation{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
-    //m_host.InstanceSettings().BundleRootPath(installedLocation.Path() + L"\\Assets\\");
-    //m_host.InstanceSettings().JavaScriptBundleFile(L"index.windows");
     m_host.InstanceSettings().UIDispatcher().Post([host = m_host]() {
         host.ReloadInstance();
     });
@@ -105,6 +90,7 @@ fire_and_forget CodePush::CodePush::LoadBundle()
 
 void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
 {
+    m_context = reactContext;
     m_host = g_host;
 }
 
@@ -206,10 +192,95 @@ void CodePush::CodePush::Disallow(ReactPromise<JSValue>&& promise) noexcept
     promise.Resolve(JSValue::Null);
 }
 
+/*
+IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder& rootFolder, path& relPath)
+{
+    while (relPath.has_root_directory())
+    {
+        auto root{ relPath.root_name() };
+        auto root_string{ root.string() };
+
+        IStorageItem item{ co_await rootFolder.TryGetItemAsync(to_hstring(root_string)) };
+        if (item == NULL)
+        {
+            auto folder{ co_await rootFolder.CreateFolderAsync(to_hstring(root_string)) };
+        }
+        else if (item.IsOfType(StorageItemTypes::Folder))
+        {
+            //auto folder{ static_cast<StorageFolder>(item) };
+            auto folder{ co_await rootFolder.GetFolderAsync(item.Name()) };
+        }
+        else // item.IsOfType(StorageItemTypes::File)
+        {
+            OutputDebugStringW(L"This isn't supposed to happen\n");
+        }
+    }
+    co_return co_await rootFolder.CreateFileAsync(L"foo");
+}
+*/
+
+IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
+{
+    std::string zipName{ to_string(zipFile.Path()) };
+
+    mz_bool status;
+    mz_zip_archive zip_archive;
+    mz_zip_zero_struct(&zip_archive);
+
+    status = mz_zip_reader_init_file(&zip_archive, zipName.c_str(), 0);
+    assert(status);
+    auto numFiles{ mz_zip_reader_get_num_files(&zip_archive) };
+
+    for (mz_uint i = 0; i < numFiles; i++)
+    {
+        mz_zip_archive_file_stat file_stat;
+        status = mz_zip_reader_file_stat(&zip_archive, i, &file_stat);
+        assert(status);
+        if (!mz_zip_reader_is_file_a_directory(&zip_archive, i))
+        {
+            auto fileName{ file_stat.m_filename };
+            auto filePath{ path(fileName) };
+            auto filePathName{ filePath.filename() };
+            auto filePathNameString{ filePathName.string() };
+
+            auto entryFile{ co_await destination.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
+            auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
+            auto os{ stream.GetOutputStreamAt(0) };
+            DataWriter dw{ os };
+
+            const auto arrBufSize = 8 * 1024;
+            std::array<uint8_t, arrBufSize> arrBuf;
+
+            mz_zip_reader_extract_iter_state* pState = mz_zip_reader_extract_iter_new(&zip_archive, i, 0);
+            UINT32 bytesRead{ 0 };
+            while (bytesRead = mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()))
+            {
+                array_view<const uint8_t> view{ arrBuf.data(), arrBuf.data() + bytesRead };
+                dw.WriteBytes(view);
+            }
+            status = mz_zip_reader_extract_iter_free(pState);
+            assert(status);
+
+            auto bar{ co_await dw.StoreAsync() };
+            auto bla{ co_await dw.FlushAsync() };
+
+            dw.Close();
+            os.Close();
+            stream.Close();
+        }
+    }
+
+    status = mz_zip_reader_end(&zip_archive);
+    assert(status);
+}
+
 winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePackage, bool notifyProgress, ReactPromise<JSValue> promise) noexcept
 {
-    
-    //JsonObject mutableUpdatePackage = {};
+    JSValueObject mutableUpdatePackage = {};
+    for (auto& pair : updatePackage)
+    {
+        mutableUpdatePackage[pair.first] = pair.second.Copy();
+    }
 
     auto downloadUrl{ updatePackage["downloadUrl"].AsString() };
     const uint32_t BufferSize{ 8 * 1024 };
@@ -238,59 +309,100 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     inputStream.Close();
     outputStream.Close();
     
+    
+
     if (isZip)
     {
         auto unzippedFolderName{ L"unzipped" };
         auto unzippedFolder = co_await storageFolder.CreateFolderAsync(unzippedFolderName, CreationCollisionOption::ReplaceExisting);
-        auto zipName{ (to_string(storageFolder.Path()) + "\\download.zip") };
+        co_await UnzipAsync(downloadFile, unzippedFolder);
 
-        mz_bool status;
-        mz_zip_archive zip_archive;
-        mz_zip_zero_struct(&zip_archive);
+        auto relativeBundlePath{ path(unzippedFolderName) / L"index.windows.bundle" };
 
-        status = mz_zip_reader_init_file(&zip_archive, zipName.c_str(), 0);
-        auto numFiles{ mz_zip_reader_get_num_files(&zip_archive) };
+        auto metadataFile{ co_await unzippedFolder.GetFileAsync(L"app.json") };
+        auto metadataFileStream{ co_await metadataFile.OpenAsync(FileAccessMode::Read) };
+        auto metadataFileInputStream{ metadataFileStream.GetInputStreamAt(0) };
+        auto buf{ co_await metadataFileInputStream.ReadAsync(Buffer{ 1024 }, 1024, InputStreamOptions::None) };
 
-        for (mz_uint i = 0; i < numFiles; i++)
-        {
-            mz_zip_archive_file_stat file_stat;
-            status = mz_zip_reader_file_stat(&zip_archive, i, &file_stat);
-            if (mz_zip_reader_is_file_a_directory(&zip_archive, i))
-            {
-                //StorageFolder::CreateFolderAsync((path(storageFolder.Path().c_str()) / unzippedName / file_stat.m_filename).c_str());
+        //std::stringstream wss;
+        //wss.write(buf.data(), buf.Length());
+
+        //co_await metadataFileFromOldUpdate.DeleteAsync();
+
+        mutableUpdatePackage["bundlePath"] = to_string(relativeBundlePath.wstring());
+
+        //bool isSignatureVerificationEnabled = stringPublicKey
+
+        /*
+        
+
+            // Merge contents with current update based on the manifest
+            String diffManifestFilePath = CodePushUtils.appendPathComponent(unzippedFolderPath,
+                    CodePushConstants.DIFF_MANIFEST_FILE_NAME);
+            boolean isDiffUpdate = FileUtils.fileAtPathExists(diffManifestFilePath);
+            if (isDiffUpdate) {
+                String currentPackageFolderPath = getCurrentPackageFolderPath();
+                CodePushUpdateUtils.copyNecessaryFilesFromCurrentPackage(diffManifestFilePath, currentPackageFolderPath, newUpdateFolderPath);
+                File diffManifestFile = new File(diffManifestFilePath);
+                diffManifestFile.delete();
             }
-            else
-            {
-                auto fileName{ file_stat.m_filename };
-                auto filePath{ path(fileName) };
-                auto filePathName{ filePath.filename() };
-                auto filePathNameString{ filePathName.string() };
 
-                auto entryFile{ co_await unzippedFolder.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
-                auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
-                auto os{ stream.GetOutputStreamAt(0) };
-                DataWriter dw{ os };
+            FileUtils.copyDirectoryContents(unzippedFolderPath, newUpdateFolderPath);
+            FileUtils.deleteFileAtPathSilently(unzippedFolderPath);
 
-                const auto arrBufSize = 8 * 1024;
-                std::array<uint8_t, arrBufSize> arrBuf;
+            // For zip updates, we need to find the relative path to the jsBundle and save it in the
+            // metadata so that we can find and run it easily the next time.
+            String relativeBundlePath = CodePushUpdateUtils.findJSBundleInUpdateContents(newUpdateFolderPath, expectedBundleFileName);
 
-                mz_zip_reader_extract_iter_state* pState = mz_zip_reader_extract_iter_new(&zip_archive, i, 0);
-                UINT32 bytesRead{ 0 };
-                while (bytesRead = mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()))
-                {
-                    array_view<const uint8_t> view{ arrBuf.data(), arrBuf.data() + bytesRead };
-                    dw.WriteBytes(view);
+            if (relativeBundlePath == null) {
+                throw new CodePushInvalidUpdateException("Update is invalid - A JS bundle file named \"" + expectedBundleFileName + "\" could not be found within the downloaded contents. Please check that you are releasing your CodePush updates using the exact same JS bundle file name that was shipped with your app's binary.");
+            } else {
+                if (FileUtils.fileAtPathExists(newUpdateMetadataPath)) {
+                    File metadataFileFromOldUpdate = new File(newUpdateMetadataPath);
+                    metadataFileFromOldUpdate.delete();
                 }
-                status = mz_zip_reader_extract_iter_free(pState);
-                auto bar{ co_await dw.StoreAsync() };
-                auto bla{ co_await dw.FlushAsync() };
-                dw.Close();
-                os.Close();
-                stream.Close();
-            }
-        }
 
-        status = mz_zip_reader_end(&zip_archive);
+                if (isDiffUpdate) {
+                    CodePushUtils.log("Applying diff update.");
+                } else {
+                    CodePushUtils.log("Applying full update.");
+                }
+
+                boolean isSignatureVerificationEnabled = (stringPublicKey != null);
+
+                String signaturePath = CodePushUpdateUtils.getSignatureFilePath(newUpdateFolderPath);
+                boolean isSignatureAppearedInBundle = FileUtils.fileAtPathExists(signaturePath);
+
+                if (isSignatureVerificationEnabled) {
+                    if (isSignatureAppearedInBundle) {
+                        CodePushUpdateUtils.verifyFolderHash(newUpdateFolderPath, newUpdateHash);
+                        CodePushUpdateUtils.verifyUpdateSignature(newUpdateFolderPath, newUpdateHash, stringPublicKey);
+                    } else {
+                        throw new CodePushInvalidUpdateException(
+                                "Error! Public key was provided but there is no JWT signature within app bundle to verify. " +
+                                "Possible reasons, why that might happen: \n" +
+                                "1. You've been released CodePush bundle update using version of CodePush CLI that is not support code signing.\n" +
+                                "2. You've been released CodePush bundle update without providing --privateKeyPath option."
+                        );
+                    }
+                } else {
+                    if (isSignatureAppearedInBundle) {
+                        CodePushUtils.log(
+                                "Warning! JWT signature exists in codepush update but code integrity check couldn't be performed because there is no public key configured. " +
+                                "Please ensure that public key is properly configured within your application."
+                        );
+                        CodePushUpdateUtils.verifyFolderHash(newUpdateFolderPath, newUpdateHash);
+                    } else {
+                        if (isDiffUpdate) {
+                            CodePushUpdateUtils.verifyFolderHash(newUpdateFolderPath, newUpdateHash);
+                        }
+                    }
+                }
+
+                CodePushUtils.setJSONValueForKey(updatePackage, CodePushConstants.RELATIVE_BUNDLE_PATH_KEY, relativeBundlePath);
+            }
+
+        */
     }
     else
     {
@@ -298,37 +410,8 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         co_await downloadFile.MoveAsync(co_await downloadFile.GetParentAsync(), L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
     }
 
-    promise.Resolve(JSValue::Null);
+    //promise.Resolve(mutableUpdatePackage.Copy());
     co_return;
-
-    //updatePackage[BinaryModifiedTimeKey] = GetBinaryResourcesModifiedTime();
-}
-
-IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder& source, path& relPath)
-{
-    /*
-    if (relPath.has_root_name())
-    {
-        auto root{ relPath.root_name() };
-        auto root_string{ root.string() };
-        auto item{ co_await source.TryGetItemAsync(to_hstring(root_string)) };
-        
-        StorageFolder folder{ nullptr };
-        if (item.IsOfType(StorageItemTypes::Folder))
-        {
-            folder = static_cast<StorageFolder>(item);
-        }
-        else
-        {
-            folder = co_await source.CreateFolderAsync(to_hstring(root_string));
-        }
-    }
-    else
-    {
-
-    }
-    */
-    co_return nullptr;
 }
 
 /*
