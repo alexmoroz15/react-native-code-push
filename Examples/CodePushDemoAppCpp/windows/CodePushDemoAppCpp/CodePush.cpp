@@ -292,18 +292,31 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
     auto downloadFile{ co_await storageFolder.CreateFileAsync(L"download.zip", Windows::Storage::CreationCollisionOption::ReplaceExisting) };
 
-    auto inputStream{ co_await client.GetInputStreamAsync(Uri(winrt::to_hstring(downloadUrl))) };
+    HttpRequestMessage reqm{ HttpMethod::Get(), Uri(to_hstring(downloadUrl)) };
+    auto resm{ co_await client.SendRequestAsync(reqm, HttpCompletionOption::ResponseHeadersRead) };
+    auto totalBytes{ resm.Content().Headers().ContentLength() };
+    auto inputStream{ co_await resm.Content().ReadAsInputStreamAsync() };
     auto outputStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::ReadWrite) };
 
     bool isZip{ true };
+
+    UINT64 receivedBytes{ 0 };
     for (;;)
     {
         auto outputBuffer{ co_await inputStream.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
+        
         if (outputBuffer.Length() == 0)
         {
             break;
         }
         co_await outputStream.WriteAsync(outputBuffer);
+
+        receivedBytes += outputBuffer.Length();
+        m_context.EmitJSEvent(L"RCTDeviceEventEmitter", L"CodePushDownloadProgress",
+            JSValueObject{
+                {"totalBytes", totalBytes.GetInt64() },
+                {"receivedBytes", receivedBytes }
+            });
     }
 
     inputStream.Close();
