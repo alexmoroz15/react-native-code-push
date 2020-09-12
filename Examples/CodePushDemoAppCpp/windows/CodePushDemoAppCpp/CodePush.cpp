@@ -294,7 +294,7 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
 
     HttpRequestMessage reqm{ HttpMethod::Get(), Uri(to_hstring(downloadUrl)) };
     auto resm{ co_await client.SendRequestAsync(reqm, HttpCompletionOption::ResponseHeadersRead) };
-    auto totalBytes{ resm.Content().Headers().ContentLength() };
+    auto totalBytes{ resm.Content().Headers().ContentLength().GetInt64() };
     auto inputStream{ co_await resm.Content().ReadAsInputStreamAsync() };
     auto outputStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::ReadWrite) };
 
@@ -312,11 +312,16 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         co_await outputStream.WriteAsync(outputBuffer);
 
         receivedBytes += outputBuffer.Length();
-        m_context.EmitJSEvent(L"RCTDeviceEventEmitter", L"CodePushDownloadProgress",
-            JSValueObject{
-                {"totalBytes", totalBytes.GetInt64() },
-                {"receivedBytes", receivedBytes }
-            });
+        
+        // PROBLEM: For some reason, this progress object gets wrapped in an array on the JS side.
+        //          It should not be wrapped in an array.
+        if (notifyProgress)
+        {
+            m_context.EmitJSEvent(L"RCTDeviceEventEmitter", L"CodePushDownloadProgress",
+                JSValueObject{
+                    {"totalBytes", totalBytes },
+                    {"receivedBytes", receivedBytes } });
+        }
     }
 
     inputStream.Close();
@@ -333,89 +338,28 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         auto relativeBundlePath{ path(unzippedFolderName) / L"index.windows.bundle" };
 
         auto metadataFile{ co_await unzippedFolder.GetFileAsync(L"app.json") };
+        /*
         auto metadataFileStream{ co_await metadataFile.OpenAsync(FileAccessMode::Read) };
         auto metadataFileInputStream{ metadataFileStream.GetInputStreamAt(0) };
-        auto buf{ co_await metadataFileInputStream.ReadAsync(Buffer{ 1024 }, 1024, InputStreamOptions::None) };
+        DataReader metadataDataReader{ metadataFileInputStream };
+        co_await metadataDataReader.LoadAsync(1024);
+        auto str{ metadataDataReader.ReadString(1024) };
+        */
+        //auto buf{ co_await metadataFileInputStream.ReadAsync(Buffer{ 1024 }, 1024, InputStreamOptions::None) };
+        auto metadata{ co_await FileIO::ReadTextAsync(metadataFile) };
 
-        //std::stringstream wss;
-        //wss.write(buf.data(), buf.Length());
+        JsonObject metadataObject{};
+        auto result{ JsonObject::TryParse(metadata, metadataObject) };
 
-        //co_await metadataFileFromOldUpdate.DeleteAsync();
+        // Basic conversion from JsonObject to JSValueObject
+        JSValueObject metadataObjectOut{};
+        for (auto& pair : metadataObject)
+        {
+            metadataObjectOut[to_string(pair.Key())] = to_string(pair.Value().GetString());
+        }
 
         mutableUpdatePackage["bundlePath"] = to_string(relativeBundlePath.wstring());
-
-        //bool isSignatureVerificationEnabled = stringPublicKey
-
-        /*
-        
-
-            // Merge contents with current update based on the manifest
-            String diffManifestFilePath = CodePushUtils.appendPathComponent(unzippedFolderPath,
-                    CodePushConstants.DIFF_MANIFEST_FILE_NAME);
-            boolean isDiffUpdate = FileUtils.fileAtPathExists(diffManifestFilePath);
-            if (isDiffUpdate) {
-                String currentPackageFolderPath = getCurrentPackageFolderPath();
-                CodePushUpdateUtils.copyNecessaryFilesFromCurrentPackage(diffManifestFilePath, currentPackageFolderPath, newUpdateFolderPath);
-                File diffManifestFile = new File(diffManifestFilePath);
-                diffManifestFile.delete();
-            }
-
-            FileUtils.copyDirectoryContents(unzippedFolderPath, newUpdateFolderPath);
-            FileUtils.deleteFileAtPathSilently(unzippedFolderPath);
-
-            // For zip updates, we need to find the relative path to the jsBundle and save it in the
-            // metadata so that we can find and run it easily the next time.
-            String relativeBundlePath = CodePushUpdateUtils.findJSBundleInUpdateContents(newUpdateFolderPath, expectedBundleFileName);
-
-            if (relativeBundlePath == null) {
-                throw new CodePushInvalidUpdateException("Update is invalid - A JS bundle file named \"" + expectedBundleFileName + "\" could not be found within the downloaded contents. Please check that you are releasing your CodePush updates using the exact same JS bundle file name that was shipped with your app's binary.");
-            } else {
-                if (FileUtils.fileAtPathExists(newUpdateMetadataPath)) {
-                    File metadataFileFromOldUpdate = new File(newUpdateMetadataPath);
-                    metadataFileFromOldUpdate.delete();
-                }
-
-                if (isDiffUpdate) {
-                    CodePushUtils.log("Applying diff update.");
-                } else {
-                    CodePushUtils.log("Applying full update.");
-                }
-
-                boolean isSignatureVerificationEnabled = (stringPublicKey != null);
-
-                String signaturePath = CodePushUpdateUtils.getSignatureFilePath(newUpdateFolderPath);
-                boolean isSignatureAppearedInBundle = FileUtils.fileAtPathExists(signaturePath);
-
-                if (isSignatureVerificationEnabled) {
-                    if (isSignatureAppearedInBundle) {
-                        CodePushUpdateUtils.verifyFolderHash(newUpdateFolderPath, newUpdateHash);
-                        CodePushUpdateUtils.verifyUpdateSignature(newUpdateFolderPath, newUpdateHash, stringPublicKey);
-                    } else {
-                        throw new CodePushInvalidUpdateException(
-                                "Error! Public key was provided but there is no JWT signature within app bundle to verify. " +
-                                "Possible reasons, why that might happen: \n" +
-                                "1. You've been released CodePush bundle update using version of CodePush CLI that is not support code signing.\n" +
-                                "2. You've been released CodePush bundle update without providing --privateKeyPath option."
-                        );
-                    }
-                } else {
-                    if (isSignatureAppearedInBundle) {
-                        CodePushUtils.log(
-                                "Warning! JWT signature exists in codepush update but code integrity check couldn't be performed because there is no public key configured. " +
-                                "Please ensure that public key is properly configured within your application."
-                        );
-                        CodePushUpdateUtils.verifyFolderHash(newUpdateFolderPath, newUpdateHash);
-                    } else {
-                        if (isDiffUpdate) {
-                            CodePushUpdateUtils.verifyFolderHash(newUpdateFolderPath, newUpdateHash);
-                        }
-                    }
-                }
-
-                CodePushUtils.setJSONValueForKey(updatePackage, CodePushConstants.RELATIVE_BUNDLE_PATH_KEY, relativeBundlePath);
-            }
-
-        */
+        promise.Resolve(metadataObjectOut.Copy());
     }
     else
     {
@@ -500,6 +444,84 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         asyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 */
+
+IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
+{
+    auto packageHash{ updatePackage["packageHash"].AsString() };
+
+    JsonObject info{};
+    auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
+    
+    //StorageFile infoFile{ nullptr };
+    //infoFile = (co_await storageFolder.TryGetItemAsync(L"codepush.json")).try_as<StorageFile>();
+    
+    StorageFile infoFile{ (co_await storageFolder.TryGetItemAsync(L"codepush.json")).try_as<StorageFile>() };
+    if (infoFile != nullptr)
+    {
+        try
+        {
+            auto infoText{ co_await FileIO::ReadTextAsync(infoFile) };
+            info.Parse(infoText);
+        }
+        catch (const hresult_error& ex)
+        {
+            OutputDebugStringW((hstring(L"An unexpected error occurred when reading info file. ") + to_hstring(ex.code()) + L": " + ex.message() + L"\n").c_str());
+        }
+    }
+
+    auto currentPackageHash{ info.GetNamedString(L"currentPackage", L"") };
+    if (!currentPackageHash.empty() && to_hstring(packageHash) == currentPackageHash)
+    {
+        // The current package is already the one being installed, so we should no-op.
+        co_return;
+    }
+
+    if (IsPendingUpdate(L""))
+    {
+        // Delete current package directory
+    }
+    else
+    {
+        auto previousPackageHash{ info.GetNamedString(L"previousPackage", L"") };
+        if (!previousPackageHash.empty() && to_hstring(packageHash) != previousPackageHash)
+        {
+            // Delete previous package directory
+        }
+
+        if (info.HasKey(L"currentPackage"))
+        {
+            info.SetNamedValue(L"previousPackage", info.GetNamedValue(L"currentPackage"));
+        }
+    }
+
+    info.SetNamedValue(L"currentPackage", JsonValue::CreateStringValue(to_hstring(packageHash)));
+
+    if (infoFile == nullptr)
+    {
+        try
+        {
+            infoFile = co_await storageFolder.CreateFileAsync(L"codepush.json");
+        }
+        catch (const hresult_error& ex)
+        {
+            OutputDebugStringW((hstring(L"An unexpected error occurred when creating package info. ") + to_hstring(ex.code()) + L": " + ex.message() + L"\n").c_str());
+        }
+    }
+    try
+    {
+        co_await FileIO::WriteTextAsync(infoFile, info.Stringify());
+    }
+    catch (const hresult_error& ex)
+    {
+        OutputDebugStringW((hstring(L"An unexpected error occurred when updating package info. ") + to_hstring(ex.code()) + L": " + ex.message() + L"\n").c_str());
+    }
+}
+
+fire_and_forget CodePush::CodePush::InstallUpdate(JSValueObject updatePackage, int installMode, int minimumBackgroundDuration, ReactPromise<JSValue> promise) noexcept
+{
+    auto asdf{ updatePackage.Copy() };
+    co_await InstallPackage(updatePackage.Copy());
+}
 
 void CodePush::CodePush::IsFailedUpdate(std::wstring packageHash, ReactPromise<bool> promise) noexcept
 {

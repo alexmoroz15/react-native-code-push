@@ -144,5 +144,10 @@ namespace CodePush
 
 		REACT_METHOD(DownloadUpdate, L"downloadUpdate");
 		winrt::fire_and_forget DownloadUpdate(winrt::Microsoft::ReactNative::JSValueObject updatePackage, bool notifyProgress, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
+
+		REACT_METHOD(InstallUpdate, L"installUpdate");
+		winrt::fire_and_forget InstallUpdate(winrt::Microsoft::ReactNative::JSValueObject updatePackage, int installMode, int minimumBackgroundDuration, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
+
+		winrt::Windows::Foundation::IAsyncAction CodePush::CodePush::InstallPackage(winrt::Microsoft::ReactNative::JSValueObject updatePackage);
 	};
 }
