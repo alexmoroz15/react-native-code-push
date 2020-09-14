@@ -2,8 +2,6 @@
 
 #include "NativeModules.h"
 
-//#include <filesystem>
-
 namespace CodePush
 {
 	enum class CodePushUpdateState
@@ -23,31 +21,7 @@ namespace CodePush
 		const std::wstring PendingUpdateIsLoadingKey{ L"isLoading" };
 		const winrt::hstring DefaultJSBundleName{ L"index.windows" };
 		const winrt::hstring AssetsBundlePrefix{ L"ms-appx:///" };
-		/*
-		// These constants represent emitted events
-		static NSString* const DownloadProgressEvent = @"CodePushDownloadProgress";
-
-		// These constants represent valid deployment statuses
-		static NSString* const DeploymentFailed = @"DeploymentFailed";
-		static NSString* const DeploymentSucceeded = @"DeploymentSucceeded";
-
-		// These keys represent the names we use to store data in NSUserDefaults
-		static NSString* const FailedUpdatesKey = @"CODE_PUSH_FAILED_UPDATES";
-		static NSString* const PendingUpdateKey = @"CODE_PUSH_PENDING_UPDATE";
-
-		// These keys are already "namespaced" by the PendingUpdateKey, so
-		// their values don't need to be obfuscated to prevent collision with app data
-		static NSString* const PendingUpdateHashKey = @"hash";
-		static NSString* const PendingUpdateIsLoadingKey = @"isLoading";
-
-		// These keys are used to inspect/augment the metadata
-		// that is associated with an update's package.
-		static NSString* const AppVersionKey = @"appVersion";
-		static NSString* const BinaryBundleDateKey = @"binaryDate";
-		static NSString* const PackageHashKey = @"packageHash";
-		static NSString* const PackageIsPendingKey = @"isPending";
-		*/
-
+		
 		bool _allowed{ true };
 		bool _restartInProgress{ false };
 		static inline bool _testConfigurationFlag{ false };
@@ -73,19 +47,6 @@ namespace CodePush
 
 
 	public:
-		/*
-		REACT_CONSTANT(CodePushInstallModeImmediate, L"codePushInstallModeImmediate")
-			const int CodePushInstallModeImmediate{ CodePushInstallMode::Immediate };
-		REACT_CONSTANT(CodePushInstallModeOnNextRestart, L"codePushInstallModeOnNextRestart")
-			const int CodePushInstallModeOnNextRestart{ CodePushInstallMode::OnNextRestart };
-		REACT_CONSTANT(CodePushInstallModeOnNextResume, L"codePushInstallModeOnNextResume")
-			const int CodePushInstallModeOnNextResume{ CodePushInstallMode::OnNextResume };
-		REACT_CONSTANT(CodePushInstallModeOnNextSuspend, L"codePushInstallModeOnNextSuspend")
-			const int CodePushInstallModeOnNextSuspend{ CodePushInstallMode::OnNextSuspend };
-		*/
-
-		//std::wstring GetApplicationSupportDirectory();
-
 		enum class CodePushInstallMode
 		{
 			IMMEDIATE = 0,
