@@ -313,16 +313,8 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
 
         receivedBytes += outputBuffer.Length();
         
-        // PROBLEM: For some reason, this progress object gets wrapped in an array on the JS side.
-        //          It should not be wrapped in an array.
         if (notifyProgress)
         {
-            /*
-            m_context.EmitJSEvent(L"RCTDeviceEventEmitter", L"CodePushDownloadProgress",
-                JSValueObject{
-                    {"totalBytes", totalBytes },
-                    {"receivedBytes", receivedBytes } });
-            */
             m_context.CallJSFunction(
                 L"RCTDeviceEventEmitter", 
                 L"emit", 
@@ -368,83 +360,8 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         co_await downloadFile.MoveAsync(co_await downloadFile.GetParentAsync(), L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
     }
 
-    //promise.Resolve(mutableUpdatePackage.Copy());
     co_return;
 }
-
-/*
-@ReactMethod
-    public void downloadUpdate(final ReadableMap updatePackage, final boolean notifyProgress, final Promise promise) {
-        AsyncTask<Void, Void, Void> asyncTask = new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                try {
-                    JSONObject mutableUpdatePackage = CodePushUtils.convertReadableToJsonObject(updatePackage);
-                    CodePushUtils.setJSONValueForKey(mutableUpdatePackage, CodePushConstants.BINARY_MODIFIED_TIME_KEY, "" + mCodePush.getBinaryResourcesModifiedTime());
-                    mUpdateManager.downloadPackage(mutableUpdatePackage, mCodePush.getAssetsBundleFileName(), new DownloadProgressCallback() {
-                        private boolean hasScheduledNextFrame = false;
-                        private DownloadProgress latestDownloadProgress = null;
-
-                        @Override
-                        public void call(DownloadProgress downloadProgress) {
-                            if (!notifyProgress) {
-                                return;
-                            }
-
-                            latestDownloadProgress = downloadProgress;
-                            // If the download is completed, synchronously send the last event.
-                            if (latestDownloadProgress.isCompleted()) {
-                                dispatchDownloadProgressEvent();
-                                return;
-                            }
-
-                            if (hasScheduledNextFrame) {
-                                return;
-                            }
-
-                            hasScheduledNextFrame = true;
-                            getReactApplicationContext().runOnUiQueueThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    ReactChoreographer.getInstance().postFrameCallback(ReactChoreographer.CallbackType.TIMERS_EVENTS, new ChoreographerCompat.FrameCallback() {
-                                        @Override
-                                        public void doFrame(long frameTimeNanos) {
-                                            if (!latestDownloadProgress.isCompleted()) {
-                                                dispatchDownloadProgressEvent();
-                                            }
-
-                                            hasScheduledNextFrame = false;
-                                        }
-                                    });
-                                }
-                            });
-                        }
-
-                        public void dispatchDownloadProgressEvent() {
-                            getReactApplicationContext()
-                                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                                    .emit(CodePushConstants.DOWNLOAD_PROGRESS_EVENT_NAME, latestDownloadProgress.createWritableMap());
-                        }
-                    }, mCodePush.getPublicKey());
-
-                    JSONObject newPackage = mUpdateManager.getPackage(CodePushUtils.tryGetString(updatePackage, CodePushConstants.PACKAGE_HASH_KEY));
-                    promise.resolve(CodePushUtils.convertJsonObjectToWritable(newPackage));
-                } catch (CodePushInvalidUpdateException e) {
-                    CodePushUtils.log(e);
-                    mSettingsManager.saveFailedUpdate(CodePushUtils.convertReadableToJsonObject(updatePackage));
-                    promise.reject(e);
-                } catch (IOException | CodePushUnknownException e) {
-                    CodePushUtils.log(e);
-                    promise.reject(e);
-                }
-
-                return null;
-            }
-        };
-
-        asyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
-*/
 
 IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
 {
