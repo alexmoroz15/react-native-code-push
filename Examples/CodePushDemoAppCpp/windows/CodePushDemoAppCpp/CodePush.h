@@ -149,5 +149,8 @@ namespace CodePush
 		winrt::fire_and_forget InstallUpdate(winrt::Microsoft::ReactNative::JSValueObject updatePackage, int installMode, int minimumBackgroundDuration, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
 
 		winrt::Windows::Foundation::IAsyncAction CodePush::CodePush::InstallPackage(winrt::Microsoft::ReactNative::JSValueObject updatePackage);
+
+		REACT_METHOD(ClearPendingRestart, L"clearPendingRestart");
+		void ClearPendingRestart(winrt::Microsoft::ReactNative::ReactPromise<void> promise) noexcept;
 	};
 }

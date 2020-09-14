@@ -317,7 +317,16 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         //          It should not be wrapped in an array.
         if (notifyProgress)
         {
+            /*
             m_context.EmitJSEvent(L"RCTDeviceEventEmitter", L"CodePushDownloadProgress",
+                JSValueObject{
+                    {"totalBytes", totalBytes },
+                    {"receivedBytes", receivedBytes } });
+            */
+            m_context.CallJSFunction(
+                L"RCTDeviceEventEmitter", 
+                L"emit", 
+                L"CodePushDownloadProgress",
                 JSValueObject{
                     {"totalBytes", totalBytes },
                     {"receivedBytes", receivedBytes } });
@@ -338,14 +347,6 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         auto relativeBundlePath{ path(unzippedFolderName) / L"index.windows.bundle" };
 
         auto metadataFile{ co_await unzippedFolder.GetFileAsync(L"app.json") };
-        /*
-        auto metadataFileStream{ co_await metadataFile.OpenAsync(FileAccessMode::Read) };
-        auto metadataFileInputStream{ metadataFileStream.GetInputStreamAt(0) };
-        DataReader metadataDataReader{ metadataFileInputStream };
-        co_await metadataDataReader.LoadAsync(1024);
-        auto str{ metadataDataReader.ReadString(1024) };
-        */
-        //auto buf{ co_await metadataFileInputStream.ReadAsync(Buffer{ 1024 }, 1024, InputStreamOptions::None) };
         auto metadata{ co_await FileIO::ReadTextAsync(metadataFile) };
 
         JsonObject metadataObject{};
@@ -448,12 +449,10 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
 IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
 {
     auto packageHash{ updatePackage["packageHash"].AsString() };
+    
 
     JsonObject info{};
     auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
-    
-    //StorageFile infoFile{ nullptr };
-    //infoFile = (co_await storageFolder.TryGetItemAsync(L"codepush.json")).try_as<StorageFile>();
     
     StorageFile infoFile{ (co_await storageFolder.TryGetItemAsync(L"codepush.json")).try_as<StorageFile>() };
     if (infoFile != nullptr)
@@ -470,7 +469,7 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
     }
 
     auto currentPackageHash{ info.GetNamedString(L"currentPackage", L"") };
-    if (!currentPackageHash.empty() && to_hstring(packageHash) == currentPackageHash)
+    if (!updatePackage["packageHash"].IsNull() && to_hstring(packageHash) == currentPackageHash)
     {
         // The current package is already the one being installed, so we should no-op.
         co_return;
@@ -519,11 +518,29 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
 
 fire_and_forget CodePush::CodePush::InstallUpdate(JSValueObject updatePackage, int installMode, int minimumBackgroundDuration, ReactPromise<JSValue> promise) noexcept
 {
-    auto asdf{ updatePackage.Copy() };
+    //auto asdf{ updatePackage.Copy() };
     co_await InstallPackage(updatePackage.Copy());
+
+    auto pendingHash{ updatePackage["packageHash"].AsString() };
+    if (updatePackage["packageHash"].IsNull())
+    {
+        // Error
+    }
+    else
+    {
+        // Save pending update
+    }
+
+    promise.Resolve(JSValue::Null);
 }
 
 void CodePush::CodePush::IsFailedUpdate(std::wstring packageHash, ReactPromise<bool> promise) noexcept
 {
     promise.Resolve(false);
+}
+
+void CodePush::CodePush::ClearPendingRestart(ReactPromise<void> promise) noexcept
+{
+    _restartQueue.clear();
+    promise.Resolve();
 }
