@@ -30,7 +30,6 @@ namespace CodePush
 		winrt::Microsoft::ReactNative::ReactNativeHost m_host;
 		winrt::Microsoft::ReactNative::ReactContext m_context;
 
-		//winrt::Microsoft::ReactNative::ReactInstanceSettings m_instance;
 		winrt::hstring m_assetsBundleFileName;
 		winrt::hstring m_ClientUniqueId;
 		std::string m_BinaryContentsHash{ "" };
@@ -44,7 +43,6 @@ namespace CodePush
 
 		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile();
 		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile(winrt::hstring assetsBundleFileName);
-
 
 	public:
 		enum class CodePushInstallMode
