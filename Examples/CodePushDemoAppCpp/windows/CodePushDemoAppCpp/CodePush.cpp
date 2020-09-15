@@ -38,6 +38,11 @@ bool IsPackageBundleLatest(IJsonValue packageMetadata)
     return false;
 }
 
+void CodePush::CodePush::SetJSBundleFile(winrt::hstring latestJSBundleFile)
+{
+    m_host.InstanceSettings().JavaScriptBundleFile(latestJSBundleFile);
+}
+
 IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile()
 {
     return GetJSBundleFile(DefaultJSBundleName);
@@ -69,6 +74,49 @@ IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile(hstring assetsBundl
         co_return binaryJSBundleUrl;
     }
 }
+
+
+/*
+
+        public String getJSBundleFileInternal(String assetsBundleFileName) {
+        this.mAssetsBundleFileName = assetsBundleFileName;
+        String binaryJsBundleUrl = CodePushConstants.ASSETS_BUNDLE_PREFIX + assetsBundleFileName;
+
+        String packageFilePath = null;
+        try {
+            packageFilePath = mUpdateManager.getCurrentPackageBundlePath(this.mAssetsBundleFileName);
+        } catch (CodePushMalformedDataException e) {
+            // We need to recover the app in case 'codepush.json' is corrupted
+            CodePushUtils.log(e.getMessage());
+            clearUpdates();
+        }
+
+        if (packageFilePath == null) {
+            // There has not been any downloaded updates.
+            CodePushUtils.logBundleUrl(binaryJsBundleUrl);
+            sIsRunningBinaryVersion = true;
+            return binaryJsBundleUrl;
+        }
+
+        JSONObject packageMetadata = this.mUpdateManager.getCurrentPackage();
+        if (isPackageBundleLatest(packageMetadata)) {
+            CodePushUtils.logBundleUrl(packageFilePath);
+            sIsRunningBinaryVersion = false;
+            return packageFilePath;
+        } else {
+            // The binary version is newer.
+            this.mDidUpdate = false;
+            if (!this.mIsDebugMode || hasBinaryVersionChanged(packageMetadata)) {
+                this.clearUpdates();
+            }
+
+            CodePushUtils.logBundleUrl(binaryJsBundleUrl);
+            sIsRunningBinaryVersion = true;
+            return binaryJsBundleUrl;
+        }
+    }
+
+*/
 
 bool CodePush::CodePush::IsUsingTestConfiguration()
 {

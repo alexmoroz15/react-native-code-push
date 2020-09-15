@@ -43,6 +43,7 @@ namespace CodePush
 
 		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile();
 		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile(winrt::hstring assetsBundleFileName);
+		void SetJSBundleFile(winrt::hstring latestJSBundleFile);
 
 	public:
 		enum class CodePushInstallMode
