@@ -78,7 +78,7 @@ IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile(hstring assetsBundl
 
 /*
 
-        public String getJSBundleFileInternal(String assetsBundleFileName) {
+    public String getJSBundleFileInternal(String assetsBundleFileName) {
         this.mAssetsBundleFileName = assetsBundleFileName;
         String binaryJsBundleUrl = CodePushConstants.ASSETS_BUNDLE_PREFIX + assetsBundleFileName;
 
@@ -240,32 +240,22 @@ void CodePush::CodePush::Disallow(ReactPromise<JSValue>&& promise) noexcept
     promise.Resolve(JSValue::Null);
 }
 
-/*
 IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder& rootFolder, path& relPath)
 {
+    OutputDebugStringW((to_hstring(relPath.root_name().c_str()) + L"\n").c_str());
+    OutputDebugStringW((to_hstring(relPath.root_directory().c_str()) + L"\n").c_str());
+    OutputDebugStringW((to_hstring(relPath.stem().c_str()) + L"\n").c_str());
+    OutputDebugStringW((to_hstring(relPath.root_path().c_str()) + L"\n").c_str());
+    OutputDebugStringW((to_hstring(relPath.parent_path().c_str()) + L"\n").c_str());
+    OutputDebugStringW((to_hstring(relPath.relative_path().c_str()) + L"\n").c_str());
     while (relPath.has_root_directory())
     {
-        auto root{ relPath.root_name() };
-        auto root_string{ root.string() };
-
-        IStorageItem item{ co_await rootFolder.TryGetItemAsync(to_hstring(root_string)) };
-        if (item == NULL)
-        {
-            auto folder{ co_await rootFolder.CreateFolderAsync(to_hstring(root_string)) };
-        }
-        else if (item.IsOfType(StorageItemTypes::Folder))
-        {
-            //auto folder{ static_cast<StorageFolder>(item) };
-            auto folder{ co_await rootFolder.GetFolderAsync(item.Name()) };
-        }
-        else // item.IsOfType(StorageItemTypes::File)
-        {
-            OutputDebugStringW(L"This isn't supposed to happen\n");
-        }
+        OutputDebugStringW(L"Hello World\n");
+        break;
     }
-    co_return co_await rootFolder.CreateFileAsync(L"foo");
+
+    return rootFolder.CreateFileAsync(to_hstring(relPath.filename().c_str()), CreationCollisionOption::ReplaceExisting);
 }
-*/
 
 IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
 {
@@ -290,6 +280,8 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
             auto filePath{ path(fileName) };
             auto filePathName{ filePath.filename() };
             auto filePathNameString{ filePathName.string() };
+
+            auto testFile{ co_await CreateFileFromPathAsync(destination, filePath) };
 
             auto entryFile{ co_await destination.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
             auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
