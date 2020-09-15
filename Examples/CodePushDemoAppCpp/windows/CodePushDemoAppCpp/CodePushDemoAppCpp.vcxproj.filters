@@ -65,6 +65,9 @@
     <Image Include="Assets\LockScreenLogo.scale-200.png">
       <Filter>Assets</Filter>
     </Image>
+    <Image Include="Assets\CodePush\assets\images\laptop_phone_howitworks.png">
+      <Filter>Assets</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest" />
@@ -83,7 +86,16 @@
   <ItemGroup>
     <None Include="PropertySheet.props" />
     <None Include="packages.config" />
-    <None Include="Assets\index.windows.bundle">
+    <None Include="Assets\CodePush\index.windows.bundle">
+      <Filter>Assets</Filter>
+    </None>
+    <None Include="Assets\CodePush\index.windows.bundle.map">
+      <Filter>Assets</Filter>
+    </None>
+    <None Include="Assets\CodePush\assets\app.json">
+      <Filter>Assets</Filter>
+    </None>
+    <None Include="Assets\CodePush\assets\node_modules\react-native-code-push\package.json">
       <Filter>Assets</Filter>
     </None>
   </ItemGroup>

@@ -122,6 +122,7 @@
     </AppxManifest>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Assets\CodePush\assets\images\laptop_phone_howitworks.png" />
     <Image Include="Assets\LockScreenLogo.scale-200.png" />
     <Image Include="Assets\SplashScreen.scale-200.png" />
     <Image Include="Assets\Square150x150Logo.scale-200.png" />
@@ -153,7 +154,16 @@
     </Midl>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Assets\index.windows.bundle">
+    <None Include="Assets\CodePush\assets\app.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Assets\CodePush\assets\node_modules\react-native-code-push\package.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Assets\CodePush\index.windows.bundle">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Assets\CodePush\index.windows.bundle.map">
       <DeploymentContent>true</DeploymentContent>
     </None>
     <None Include="packages.config" />
