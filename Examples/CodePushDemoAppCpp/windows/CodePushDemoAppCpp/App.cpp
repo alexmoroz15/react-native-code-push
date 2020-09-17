@@ -21,26 +21,31 @@ winrt::Microsoft::ReactNative::ReactNativeHost g_host{ nullptr };
 App::App() noexcept
 {
     MainComponentName(L"CodePushDemoAppCpp");
-
-#if BUNDLE
+    
+//#if BUNDLE
     //InstanceSettings().BundleRootPath(L"ms-appx:///");
-    //InstanceSettings().BundleRootPath(L"C:\\GitHub\\react-native-code-push\\Examples\\CodePushDemoAppCpp\\windows\\CodePushDemoAppCpp\\Assets");
-    InstanceSettings().BundleRootPath(L"ms-appx:///assets/CodePush/");
-
+    InstanceSettings().BundleRootPath(L"C:\\GitHub\\react-native-code-push\\Examples\\CodePushDemoAppCpp\\windows\\CodePushDemoAppCpp\\Assets");
+    /*
+    if (InstanceSettings().BundleRootPath().empty())
+    {
+        InstanceSettings().BundleRootPath(L"ms-appx:///assets/CodePush/");
+    }
+    */
+    
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
     InstanceSettings().UseFastRefresh(false);
-#else
+/*#else
     JavaScriptMainModuleName(L"index");
     InstanceSettings().UseWebDebugger(true);
     InstanceSettings().UseFastRefresh(true);
-#endif
+#endif*/
 
-#if _DEBUG
+/*#if _DEBUG
     InstanceSettings().EnableDeveloperMenu(true);
-#else
+#else*/
     InstanceSettings().EnableDeveloperMenu(false);
-#endif
+//#endif
 
     //instanceSettings = InstanceSettings();
     //InstanceSettings().Properties().Set(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
