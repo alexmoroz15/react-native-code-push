@@ -248,7 +248,7 @@ IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder& rootFolder, 
     OutputDebugStringW((to_hstring(relPath.root_path().c_str()) + L"\n").c_str());
     OutputDebugStringW((to_hstring(relPath.parent_path().c_str()) + L"\n").c_str());
     OutputDebugStringW((to_hstring(relPath.relative_path().c_str()) + L"\n").c_str());
-    while (relPath.has_root_directory())
+    while (relPath.has_stem() /* relPath.has_root_directory() */)
     {
         OutputDebugStringW(L"Hello World\n");
         break;
