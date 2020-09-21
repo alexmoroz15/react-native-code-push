@@ -192,3 +192,6 @@ Examples/testapp_rn
 /Examples/CodePushDemoAppTest/
 /Examples/CodePushDemoAppCpp/android/
 /Examples/CodePushDemoAppCpp/ios/
+/Examples/CodePushDemoAppCpp/output/assets/app.json
+/Examples/CodePushDemoAppCpp/output/bundle.js
+/Examples/CodePushDemoAppCpp/output/bundle.map
