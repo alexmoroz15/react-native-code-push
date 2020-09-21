@@ -21,7 +21,7 @@
     <ClCompile Include="CodePushPackage.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
-    <ClCompile Include="..\amalgamation\miniz.c">
+    <ClCompile Include="miniz.c">
       <Filter>Miniz</Filter>
     </ClCompile>
   </ItemGroup>
@@ -39,7 +39,7 @@
     <ClInclude Include="CodePushPackage.h">
       <Filter>CodePush</Filter>
     </ClInclude>
-    <ClInclude Include="..\amalgamation\miniz.h">
+    <ClInclude Include="miniz.h">
       <Filter>Miniz</Filter>
     </ClInclude>
   </ItemGroup>
