@@ -136,10 +136,19 @@ fire_and_forget CodePush::CodePush::LoadBundle()
     co_return;
 }
 
+fire_and_forget InitBundle()
+{
+    auto localStorage{ winrt::Windows::Storage::ApplicationData::Current().LocalFolder() };
+    auto currentPackageInfoFile{ (co_await localStorage.TryGetItemAsync(L"codepush.json")).try_as<StorageFile>() };
+    //InstanceSettings().BundleRootPath(L"C:\\GitHub\\react-native-code-push\\Examples\\CodePushDemoAppCpp\\windows\\CodePushDemoAppCpp\\Assets");
+}
+
 void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
     m_host = g_host;
+
+    //InitBundle();
 }
 
 bool CodePush::CodePush::IsPendingUpdate(winrt::hstring&& packageHash)
@@ -292,7 +301,7 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
             std::array<uint8_t, arrBufSize> arrBuf;
 
             mz_zip_reader_extract_iter_state* pState = mz_zip_reader_extract_iter_new(&zip_archive, i, 0);
-            UINT32 bytesRead{ 0 };
+            size_t bytesRead{ 0 };
             while (bytesRead = mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()))
             {
                 array_view<const uint8_t> view{ arrBuf.data(), arrBuf.data() + bytesRead };
@@ -301,8 +310,8 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
             status = mz_zip_reader_extract_iter_free(pState);
             assert(status);
 
-            auto bar{ co_await dw.StoreAsync() };
-            auto bla{ co_await dw.FlushAsync() };
+            co_await dw.StoreAsync();
+            co_await dw.FlushAsync();
 
             dw.Close();
             os.Close();
@@ -322,6 +331,12 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         mutableUpdatePackage[pair.first] = pair.second.Copy();
     }
 
+    auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
+
+    auto newUpdateHash{ updatePackage["packageHash"].AsString() };
+    auto newUpdateFolder{ co_await storageFolder.CreateFolderAsync(to_hstring(newUpdateHash), CreationCollisionOption::ReplaceExisting) };
+
+
     auto downloadUrl{ updatePackage["downloadUrl"].AsString() };
     const uint32_t BufferSize{ 8 * 1024 };
 
@@ -329,7 +344,6 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     auto headers{ client.DefaultRequestHeaders() };
     headers.Append(L"Accept-Encoding", L"identity");
 
-    auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
     auto downloadFile{ co_await storageFolder.CreateFileAsync(L"download.zip", Windows::Storage::CreationCollisionOption::ReplaceExisting) };
 
     HttpRequestMessage reqm{ HttpMethod::Get(), Uri(to_hstring(downloadUrl)) };
@@ -375,9 +389,23 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         auto unzippedFolderName{ L"unzipped" };
         auto unzippedFolder = co_await storageFolder.CreateFolderAsync(unzippedFolderName, CreationCollisionOption::ReplaceExisting);
         co_await UnzipAsync(downloadFile, unzippedFolder);
+        downloadFile.DeleteAsync();
 
         auto relativeBundlePath{ path(unzippedFolderName) / L"index.windows.bundle" };
 
+        auto unzippedContents{ co_await unzippedFolder.GetItemsAsync() };
+        for (auto unzippedItem : unzippedContents)
+        {
+            if (unzippedItem.IsOfType(StorageItemTypes::File))
+            {
+                auto unzippedFile{ unzippedItem.try_as<StorageFile>() };
+                co_await unzippedFile.CopyAsync(newUpdateFolder);
+            }
+        }
+
+        unzippedFolder.DeleteAsync();
+
+        /*
         auto metadataFile{ co_await unzippedFolder.GetFileAsync(L"app.json") };
         auto metadata{ co_await FileIO::ReadTextAsync(metadataFile) };
 
@@ -390,15 +418,20 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         {
             metadataObjectOut[to_string(pair.Key())] = to_string(pair.Value().GetString());
         }
+        */
 
         mutableUpdatePackage["bundlePath"] = to_string(relativeBundlePath.wstring());
-        promise.Resolve(metadataObjectOut.Copy());
+        promise.Resolve(mutableUpdatePackage.Copy());
     }
     else
     {
         // Rename the file
-        co_await downloadFile.MoveAsync(co_await downloadFile.GetParentAsync(), L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
+        //co_await downloadFile.MoveAsync(co_await downloadFile.GetParentAsync(), L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
+        co_await downloadFile.RenameAsync(L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
     }
+
+    auto newUpdateMetadataFile{ co_await newUpdateFolder.CreateFileAsync(L"app.json", CreationCollisionOption::ReplaceExisting) };
+    co_await FileIO::WriteTextAsync(newUpdateMetadataFile, to_hstring(JSValue{ std::move(mutableUpdatePackage) }.ToString()));
 
     co_return;
 }
@@ -417,7 +450,8 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
         try
         {
             auto infoText{ co_await FileIO::ReadTextAsync(infoFile) };
-            info.Parse(infoText);
+            info = JsonObject::Parse(infoText);
+            //info.Parse(infoText);
         }
         catch (const hresult_error& ex)
         {
@@ -457,6 +491,10 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
         try
         {
             infoFile = co_await storageFolder.CreateFileAsync(L"codepush.json");
+
+            auto localSettings{ ApplicationData::Current().LocalSettings() };
+            auto currentPackageFolder{ co_await storageFolder.GetFolderAsync(to_hstring(packageHash)) };
+            localSettings.Values().Insert(L"currentPackageFolderPath", box_value(currentPackageFolder.Path() + L"\\"));
         }
         catch (const hresult_error& ex)
         {
