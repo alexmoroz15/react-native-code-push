@@ -11,8 +11,8 @@ namespace CodePush
 		Latest
 	};
 
-	REACT_MODULE(CodePush)
-		struct CodePush
+	REACT_MODULE(CodePush);
+	struct CodePush
 	{
 	private:
 		const std::wstring PendingUpdatekey{ L"CODE_PUSH_PENDING_UPDATE" };
