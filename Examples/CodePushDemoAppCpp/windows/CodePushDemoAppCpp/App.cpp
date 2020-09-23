@@ -9,6 +9,8 @@
 #include "winrt/Windows.Foundation.h"
 #include "winrt/Windows.Data.Json.h"
 
+#include "CodePush.h"
+
 using namespace winrt::CodePushDemoAppCpp;
 using namespace winrt::CodePushDemoAppCpp::implementation;
 
@@ -31,16 +33,7 @@ App::App() noexcept
     MainComponentName(L"CodePushDemoAppCpp");
 
 //#if BUNDLE
-    
-    auto localSettings{ ApplicationData::Current().LocalSettings() };
-    auto currentBundleFolderPathBox{ localSettings.Values().TryLookup(L"currentPackageFolderPath") };
-    hstring currentBundleFolderPath;
-    if (currentBundleFolderPathBox != nullptr)
-    {
-        currentBundleFolderPath = unbox_value<hstring>(currentBundleFolderPathBox);
-        // Would be good to check if the file exists first before defaulting to a main bundle.
-        InstanceSettings().BundleRootPath(currentBundleFolderPath);
-    }
+    InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
 
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);

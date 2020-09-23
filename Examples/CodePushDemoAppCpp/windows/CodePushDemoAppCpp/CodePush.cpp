@@ -43,6 +43,20 @@ void CodePush::CodePush::SetJSBundleFile(winrt::hstring latestJSBundleFile)
     m_host.InstanceSettings().JavaScriptBundleFile(latestJSBundleFile);
 }
 
+hstring CodePush::CodePush::GetJSBundleFileSync()
+{
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    auto currentBundleFolderPathBox{ localSettings.Values().TryLookup(L"currentPackageFolderPath") };
+    hstring currentBundleFolderPath;
+    if (currentBundleFolderPathBox != nullptr)
+    {
+        currentBundleFolderPath = unbox_value<hstring>(currentBundleFolderPathBox);
+        // Would be good to check if the file exists first before defaulting to a main bundle.
+        return currentBundleFolderPath;
+        //InstanceSettings().BundleRootPath(currentBundleFolderPath);
+    }
+}
+
 IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile()
 {
     return GetJSBundleFile(DefaultJSBundleName);

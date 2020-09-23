@@ -61,6 +61,8 @@ namespace CodePush
 			LATEST = 2
 		};
 
+		static winrt::hstring GetJSBundleFileSync();
+
 		REACT_CONSTANT_PROVIDER(GetConstants);
 		void GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
 		{
