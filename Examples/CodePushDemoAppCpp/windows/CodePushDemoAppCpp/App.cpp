@@ -33,7 +33,7 @@ App::App() noexcept
     MainComponentName(L"CodePushDemoAppCpp");
 
 //#if BUNDLE
-    InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
+    //InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
 
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
