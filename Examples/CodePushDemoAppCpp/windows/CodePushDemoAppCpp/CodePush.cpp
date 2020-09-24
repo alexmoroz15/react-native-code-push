@@ -13,7 +13,7 @@
 #include <exception>
 #include <filesystem>
 #include <cstdio>
-#include <sstream>
+#include <stack>
 
 #include "miniz.h"
 
@@ -263,21 +263,38 @@ void CodePush::CodePush::Disallow(ReactPromise<JSValue>&& promise) noexcept
     promise.Resolve(JSValue::Null);
 }
 
-IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder& rootFolder, path& relPath)
+IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder rootFolder, path& relPath)
 {
-    OutputDebugStringW((to_hstring(relPath.root_name().c_str()) + L"\n").c_str());
-    OutputDebugStringW((to_hstring(relPath.root_directory().c_str()) + L"\n").c_str());
-    OutputDebugStringW((to_hstring(relPath.stem().c_str()) + L"\n").c_str());
-    OutputDebugStringW((to_hstring(relPath.root_path().c_str()) + L"\n").c_str());
-    OutputDebugStringW((to_hstring(relPath.parent_path().c_str()) + L"\n").c_str());
-    OutputDebugStringW((to_hstring(relPath.relative_path().c_str()) + L"\n").c_str());
-    while (relPath.has_stem() /* relPath.has_root_directory() */)
+    std::stack<std::string> pathParts;
+    pathParts.push(relPath.filename().string());
+    while (relPath.has_parent_path())
     {
-        OutputDebugStringW(L"Hello World\n");
-        break;
+        relPath = relPath.parent_path();
+        pathParts.push(relPath.filename().string());
     }
 
-    return rootFolder.CreateFileAsync(to_hstring(relPath.filename().c_str()), CreationCollisionOption::ReplaceExisting);
+    while (pathParts.size() > 1)
+    {
+        auto itemName{ pathParts.top() };
+        auto item{ co_await rootFolder.TryGetItemAsync(to_hstring(itemName)) };
+        if (item == nullptr)
+        {
+            rootFolder = co_await rootFolder.CreateFolderAsync(to_hstring(itemName));
+        }
+        else
+        {
+            rootFolder = item.try_as<StorageFolder>();
+        }
+        pathParts.pop();
+    }
+    auto fileName{ pathParts.top() };
+    auto file{ co_await rootFolder.CreateFileAsync(to_hstring(fileName), CreationCollisionOption::ReplaceExisting) };
+    co_return file;
+}
+
+IAsyncOperation<hstring> FindFilePathAsync(StorageFolder rootFolder, hstring& fileName)
+{
+    co_return L"";
 }
 
 IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
@@ -304,9 +321,9 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
             auto filePathName{ filePath.filename() };
             auto filePathNameString{ filePathName.string() };
 
-            auto testFile{ co_await CreateFileFromPathAsync(destination, filePath) };
+            auto entryFile{ co_await CreateFileFromPathAsync(destination, filePath) };
 
-            auto entryFile{ co_await destination.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
+            //auto entryFile{ co_await destination.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
             auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
             auto os{ stream.GetOutputStreamAt(0) };
             DataWriter dw{ os };
@@ -348,8 +365,7 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
 
     auto newUpdateHash{ updatePackage["packageHash"].AsString() };
-    auto newUpdateFolder{ co_await storageFolder.CreateFolderAsync(to_hstring(newUpdateHash), CreationCollisionOption::ReplaceExisting) };
-
+    StorageFolder newUpdateFolder{ nullptr };
 
     auto downloadUrl{ updatePackage["downloadUrl"].AsString() };
     const uint32_t BufferSize{ 8 * 1024 };
@@ -396,8 +412,6 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     inputStream.Close();
     outputStream.Close();
     
-    
-
     if (isZip)
     {
         auto unzippedFolderName{ L"unzipped" };
@@ -405,34 +419,12 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         co_await UnzipAsync(downloadFile, unzippedFolder);
         downloadFile.DeleteAsync();
 
+        auto test{ co_await FindFilePathAsync(unzippedFolder, to_hstring(newUpdateHash)) };
+
         auto relativeBundlePath{ path(unzippedFolderName) / L"index.windows.bundle" };
 
-        auto unzippedContents{ co_await unzippedFolder.GetItemsAsync() };
-        for (auto unzippedItem : unzippedContents)
-        {
-            if (unzippedItem.IsOfType(StorageItemTypes::File))
-            {
-                auto unzippedFile{ unzippedItem.try_as<StorageFile>() };
-                co_await unzippedFile.CopyAsync(newUpdateFolder);
-            }
-        }
-
-        unzippedFolder.DeleteAsync();
-
-        /*
-        auto metadataFile{ co_await unzippedFolder.GetFileAsync(L"app.json") };
-        auto metadata{ co_await FileIO::ReadTextAsync(metadataFile) };
-
-        JsonObject metadataObject{};
-        auto result{ JsonObject::TryParse(metadata, metadataObject) };
-
-        // Basic conversion from JsonObject to JSValueObject
-        JSValueObject metadataObjectOut{};
-        for (auto& pair : metadataObject)
-        {
-            metadataObjectOut[to_string(pair.Key())] = to_string(pair.Value().GetString());
-        }
-        */
+        co_await unzippedFolder.RenameAsync(to_hstring(newUpdateHash), NameCollisionOption::ReplaceExisting);
+        newUpdateFolder = unzippedFolder;
 
         mutableUpdatePackage["bundlePath"] = to_string(relativeBundlePath.wstring());
         promise.Resolve(mutableUpdatePackage.Copy());
@@ -440,12 +432,26 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     else
     {
         // Rename the file
-        //co_await downloadFile.MoveAsync(co_await downloadFile.GetParentAsync(), L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
         co_await downloadFile.RenameAsync(L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
     }
 
-    auto newUpdateMetadataFile{ co_await newUpdateFolder.CreateFileAsync(L"app.json", CreationCollisionOption::ReplaceExisting) };
-    co_await FileIO::WriteTextAsync(newUpdateMetadataFile, to_hstring(JSValue{ std::move(mutableUpdatePackage) }.ToString()));
+    auto newUpdateMetadataPath{ path(newUpdateHash) / "CodePush" / "assets" / "app.json" };
+    auto newUpdateMetadataFile{ co_await CreateFileFromPathAsync(storageFolder, newUpdateMetadataPath) };
+
+    auto metadataString{ JSValue{ std::move(mutableUpdatePackage) }.ToString() };
+    // I shouldn't have to do this processing
+    /*
+    size_t i;
+    while ((i = metadataString.find("1\n")) != std::string::npos)
+    {
+        metadataString = metadataString.replace(i, 2, "");
+    }
+    while ((i = metadataString.find("0\n")) != std::string::npos)
+    {
+        metadataString = metadataString.replace(i, 2, ",");
+    }
+    */
+    co_await FileIO::WriteTextAsync(newUpdateMetadataFile, to_hstring(metadataString));
 
     co_return;
 }
