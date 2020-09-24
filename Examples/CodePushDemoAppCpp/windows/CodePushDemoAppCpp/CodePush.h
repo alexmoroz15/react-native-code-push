@@ -61,6 +61,8 @@ namespace CodePush
 			LATEST = 2
 		};
 
+		// Synchronous functions are not allowed on the UI thread.
+		// Incidentally, the application is initialized and the bundle loaded by the UI thread.
 		static winrt::hstring GetJSBundleFileSync();
 
 		REACT_CONSTANT_PROVIDER(GetConstants);
