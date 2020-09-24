@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <cstdio>
 #include <stack>
+#include <string_view>
 
 #include "miniz.h"
 
@@ -292,8 +293,34 @@ IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder rootFolder, p
     co_return file;
 }
 
-IAsyncOperation<hstring> FindFilePathAsync(StorageFolder rootFolder, hstring& fileName)
+IAsyncOperation<hstring> FindFilePathAsync(const StorageFolder& rootFolder, std::wstring_view fileName)
 {
+    std::stack<StorageFolder> candidateFolders;
+    candidateFolders.push(rootFolder);
+    
+    while (!candidateFolders.empty())
+    {
+        auto relRootFolder = candidateFolders.top();
+        candidateFolders.pop();
+
+        auto files{ co_await relRootFolder.GetFilesAsync() };
+        for (const auto& file : files)
+        {
+            if (file.Name() == fileName)
+            {
+                std::wstring filePath{ file.Path() };
+                hstring filePathSub{ filePath.substr(rootFolder.Path().size() + 1) };
+                co_return filePathSub;
+            }
+        }
+
+        auto folders{ co_await rootFolder.GetFoldersAsync() };
+        for (const auto& folder : folders)
+        {
+            candidateFolders.push(folder);
+        }
+    }
+
     co_return L"";
 }
 
@@ -419,9 +446,8 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         co_await UnzipAsync(downloadFile, unzippedFolder);
         downloadFile.DeleteAsync();
 
-        auto test{ co_await FindFilePathAsync(unzippedFolder, to_hstring(newUpdateHash)) };
-
-        auto relativeBundlePath{ path(unzippedFolderName) / L"index.windows.bundle" };
+        auto relativeBundlePath1{ co_await FindFilePathAsync(unzippedFolder, L"index.windows.bundle") };
+        auto relativeBundlePath{ path(newUpdateHash) / std::wstring_view(relativeBundlePath1) };
 
         co_await unzippedFolder.RenameAsync(to_hstring(newUpdateHash), NameCollisionOption::ReplaceExisting);
         newUpdateFolder = unzippedFolder;
