@@ -54,7 +54,6 @@ hstring CodePush::CodePush::GetJSBundleFileSync()
         currentBundleFolderPath = unbox_value<hstring>(currentBundleFolderPathBox);
         // Would be good to check if the file exists first before defaulting to a main bundle.
         return currentBundleFolderPath;
-        //InstanceSettings().BundleRootPath(currentBundleFolderPath);
     }
 }
 
@@ -89,7 +88,6 @@ IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile(hstring assetsBundl
         co_return binaryJSBundleUrl;
     }
 }
-
 
 /*
 
@@ -155,15 +153,12 @@ fire_and_forget InitBundle()
 {
     auto localStorage{ winrt::Windows::Storage::ApplicationData::Current().LocalFolder() };
     auto currentPackageInfoFile{ (co_await localStorage.TryGetItemAsync(L"codepush.json")).try_as<StorageFile>() };
-    //InstanceSettings().BundleRootPath(L"C:\\GitHub\\react-native-code-push\\Examples\\CodePushDemoAppCpp\\windows\\CodePushDemoAppCpp\\Assets");
 }
 
 void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
     m_host = g_host;
-
-    //InitBundle();
 }
 
 bool CodePush::CodePush::IsPendingUpdate(winrt::hstring&& packageHash)
@@ -349,8 +344,6 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
             auto filePathNameString{ filePathName.string() };
 
             auto entryFile{ co_await CreateFileFromPathAsync(destination, filePath) };
-
-            //auto entryFile{ co_await destination.CreateFileAsync(to_hstring(filePathNameString), CreationCollisionOption::ReplaceExisting) };
             auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
             auto os{ stream.GetOutputStreamAt(0) };
             DataWriter dw{ os };
@@ -500,7 +493,6 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
         {
             auto infoText{ co_await FileIO::ReadTextAsync(infoFile) };
             info = JsonObject::Parse(infoText);
-            //info.Parse(infoText);
         }
         catch (const hresult_error& ex)
         {
