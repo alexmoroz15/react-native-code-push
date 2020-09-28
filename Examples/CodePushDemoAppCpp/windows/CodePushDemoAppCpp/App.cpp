@@ -34,6 +34,10 @@ App::App() noexcept
 
 //#if BUNDLE
     //InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
+    
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    localSettings.Values().Remove(L"currentPackageFolderPath");
+    
 
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
