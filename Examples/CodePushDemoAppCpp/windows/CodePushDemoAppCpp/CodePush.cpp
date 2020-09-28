@@ -465,27 +465,30 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
     auto newUpdateMetadataFile{ co_await CreateFileFromPathAsync(storageFolder, newUpdateMetadataPath) };
 
     auto metadataString{ JSValue{ std::move(mutableUpdatePackage) }.ToString() };
+    
     // I shouldn't have to do this processing
-    /*
     size_t i;
     while ((i = metadataString.find("1\n")) != std::string::npos)
     {
-        metadataString = metadataString.replace(i, 2, "");
+        metadataString = metadataString.replace(i, 4, "\"");
     }
     while ((i = metadataString.find("0\n")) != std::string::npos)
     {
-        metadataString = metadataString.replace(i, 2, ",");
+        metadataString = metadataString.replace(i, 4, ",\"");
     }
-    */
+    i = 0;
+    while ((i = metadataString.find(": ", i + 2)) != std::string::npos)
+    {
+        metadataString = metadataString.insert(i, "\"");
+    }
+    
     co_await FileIO::WriteTextAsync(newUpdateMetadataFile, to_hstring(metadataString));
-
     co_return;
 }
 
 IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
 {
     auto packageHash{ updatePackage["packageHash"].AsString() };
-    
 
     JsonObject info{};
     auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
@@ -512,9 +515,14 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
         co_return;
     }
 
-    if (IsPendingUpdate(L""))
+    if (IsPendingUpdate(to_hstring(packageHash)))
     {
         // Delete current package directory
+        auto currentPackageFolder{ (co_await storageFolder.TryGetItemAsync(to_hstring(packageHash))).try_as<StorageFolder>() };
+        if (currentPackageFolder != nullptr)
+        {
+            currentPackageFolder.DeleteAsync();
+        }
     }
     else
     {
@@ -522,6 +530,11 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
         if (!previousPackageHash.empty() && to_hstring(packageHash) != previousPackageHash)
         {
             // Delete previous package directory
+            auto previousPackageFolder{ (co_await storageFolder.TryGetItemAsync(to_hstring(previousPackageHash))).try_as<StorageFolder>() };
+            if (previousPackageFolder != nullptr)
+            {
+                previousPackageFolder.DeleteAsync();
+            }
         }
 
         if (info.HasKey(L"currentPackage"))
@@ -537,10 +550,6 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
         try
         {
             infoFile = co_await storageFolder.CreateFileAsync(L"codepush.json");
-
-            auto localSettings{ ApplicationData::Current().LocalSettings() };
-            auto currentPackageFolder{ co_await storageFolder.GetFolderAsync(to_hstring(packageHash)) };
-            localSettings.Values().Insert(L"currentPackageFolderPath", box_value(currentPackageFolder.Path() + L"\\"));
         }
         catch (const hresult_error& ex)
         {
@@ -550,6 +559,13 @@ IAsyncAction CodePush::CodePush::InstallPackage(JSValueObject updatePackage)
     try
     {
         co_await FileIO::WriteTextAsync(infoFile, info.Stringify());
+
+        auto localSettings{ ApplicationData::Current().LocalSettings() };
+        auto currentPackageFolder{ co_await storageFolder.GetFolderAsync(to_hstring(packageHash)) };
+        auto relPath{ co_await FindFilePathAsync(currentPackageFolder, L"index.windows.bundle") };
+        path relPathPath{ std::wstring_view(relPath) };
+        path relPathPathStem{ relPathPath.parent_path() };
+        localSettings.Values().Insert(L"currentPackageFolderPath", box_value(currentPackageFolder.Path() + L"\\" + relPathPathStem.wstring() + L"\\"));
     }
     catch (const hresult_error& ex)
     {
