@@ -33,6 +33,45 @@ using namespace std::filesystem;
 
 const hstring PackageHashKey{ L"packageHash" };
 
+namespace winrt::Microsoft::ReactNative
+{
+    void WriteValue(IJSValueWriter const& writer, IJsonValue const& value) noexcept
+    {
+        switch (value.ValueType())
+        {
+        case JsonValueType::Object:
+            writer.WriteObjectBegin();
+            for (const auto& pair : value.GetObject())
+            {
+                writer.WritePropertyName(pair.Key());
+                WriteValue(writer, pair.Value());
+            }
+            writer.WriteObjectEnd();
+            break;
+        case JsonValueType::Array:
+            writer.WriteArrayBegin();
+            for (const auto& elem : value.GetArray())
+            {
+                WriteValue(writer, elem);
+            }
+            writer.WriteArrayEnd();
+            break;
+        case JsonValueType::Boolean:
+            writer.WriteBoolean(value.GetBoolean());
+            break;
+        case JsonValueType::Number:
+            writer.WriteDouble(value.GetNumber());
+            break;
+        case JsonValueType::String:
+            writer.WriteString(value.GetString());
+            break;
+        case JsonValueType::Null:
+            writer.WriteNull();
+            break;
+        }
+    }
+}
+
 bool IsPackageBundleLatest(IJsonValue packageMetadata)
 {
     // idk
@@ -55,6 +94,7 @@ hstring CodePush::CodePush::GetJSBundleFileSync()
         // Would be good to check if the file exists first before defaulting to a main bundle.
         return currentBundleFolderPath;
     }
+    return L"";
 }
 
 IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile()
@@ -67,7 +107,7 @@ IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile(hstring assetsBundl
     m_assetsBundleFileName = assetsBundleFileName;
     auto binaryJSBundleUrl = AssetsBundlePrefix +  m_assetsBundleFileName;
     //auto binaryJSBundleUrl = m_assetsBundleFileName;
-    auto packageFilePath = co_await CodePushPackage::GetCurrentPackageBundlePath(m_assetsBundleFileName);
+    auto packageFilePath = co_await CodePushPackage::GetCurrentPackageBundlePathAsync(m_assetsBundleFileName);
     if (packageFilePath.empty())
     {
         //There has not been any downloaded updates
@@ -76,7 +116,7 @@ IAsyncOperation<hstring> CodePush::CodePush::GetJSBundleFile(hstring assetsBundl
         co_return binaryJSBundleUrl;
     }
 
-    auto packageMetadata = co_await CodePushPackage::GetCurrentPackage();
+    auto packageMetadata = co_await CodePushPackage::GetCurrentPackageAsync();
     if (IsPackageBundleLatest(packageMetadata))
     {
         CodePushUtils::LogBundleUrl(packageFilePath.c_str());
@@ -180,9 +220,50 @@ void CodePush::CodePush::GetNewStatusReport(ReactPromise<JSValue>&& promise) noe
     promise.Resolve(JSValue::Null);
 }
 
-winrt::fire_and_forget CodePush::CodePush::GetUpdateMetadata(CodePushUpdateState updateState, ReactPromise<JSValue> promise) noexcept
+JSValue JsonObject2JSValue(const JsonObject& input)
 {
-    promise.Resolve(JSValue::Null);
+    return nullptr;
+}
+
+
+bool IsRunningBinaryVersion()
+{
+    return true;
+}
+
+winrt::fire_and_forget CodePush::CodePush::GetUpdateMetadata(CodePushUpdateState updateState, ReactPromise<IJsonValue> promise) noexcept
+{
+    // Get the current package
+    auto currentPackage{ co_await CodePushPackage::GetCurrentPackageAsync() };
+    
+    //auto currentUpdateIsPending{ currentPackage.GetNamedBoolean(L"isPending", false) };
+    auto currentUpdateIsPending = false;
+
+    if (updateState == CodePushUpdateState::PENDING && !currentUpdateIsPending)
+    {
+        promise.Resolve(JsonValue::CreateNullValue().try_as<IJsonValue>());
+    }
+    else if (updateState == CodePushUpdateState::RUNNING && currentUpdateIsPending)
+    {
+        auto previousPackage{ co_await CodePushPackage::GetPreviousPackageAsync() };
+        if (previousPackage == nullptr)
+        {
+            promise.Resolve(JsonValue::CreateNullValue().try_as<IJsonValue>());
+            co_return;
+        }
+
+        promise.Resolve(previousPackage);
+    }
+    else
+    {
+        if (IsRunningBinaryVersion())
+        {
+            currentPackage.Insert(L"_isDebugOnly", JsonValue::CreateBooleanValue(true));
+        }
+
+        currentPackage.Insert(L"isPending", JsonValue::CreateBooleanValue(currentUpdateIsPending));
+        promise.Resolve(currentPackage);
+    }
     co_return;
 }
 
@@ -352,8 +433,8 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
             std::array<uint8_t, arrBufSize> arrBuf;
 
             mz_zip_reader_extract_iter_state* pState = mz_zip_reader_extract_iter_new(&zip_archive, i, 0);
-            size_t bytesRead{ 0 };
-            while (bytesRead = mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()))
+            //size_t bytesRead{ 0 };
+            while (size_t bytesRead{ mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()) })
             {
                 array_view<const uint8_t> view{ arrBuf.data(), arrBuf.data() + bytesRead };
                 dw.WriteBytes(view);
