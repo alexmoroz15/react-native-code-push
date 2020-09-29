@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NativeModules.h"
+#include "winrt/Windows.Data.Json.h"
 
 namespace CodePush
 {
@@ -95,13 +96,16 @@ namespace CodePush
 		void GetNewStatusReport(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
 		REACT_METHOD(GetUpdateMetadata, L"getUpdateMetadata");
-		winrt::fire_and_forget GetUpdateMetadata(CodePushUpdateState updateState, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept;
+		winrt::fire_and_forget GetUpdateMetadata(CodePushUpdateState updateState, winrt::Microsoft::ReactNative::ReactPromise<winrt::Windows::Data::Json::IJsonValue> promise) noexcept;
 
 		REACT_METHOD(IsFailedUpdate, L"isFailedUpdate");
 		void IsFailedUpdate(std::wstring packageHash, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept;
 
 		REACT_METHOD(RestartApp, L"restartApp");
 		void RestartApp(bool onlyIfUpdateIsPending, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
+
+		REACT_METHOD(IsFirstRun, L"isFirstRun");
+		void isFirstRun(winrt::Microsoft::ReactNative::ReactPromise<bool>) noexcept;
 
 		REACT_METHOD(NotifyApplicationReady, L"notifyApplicationReady");
 		void NotifyApplicationReady(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
