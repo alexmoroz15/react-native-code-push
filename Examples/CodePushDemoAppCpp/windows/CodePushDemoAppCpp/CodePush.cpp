@@ -305,6 +305,19 @@ void CodePush::CodePush::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSV
 	promise.Resolve(JSValue::Null);
 }
 
+bool DidUpdate()
+{
+    return true;
+}
+
+fire_and_forget CodePush::CodePush::IsFirstRun(std::wstring packageHash, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept
+{
+    bool isFirstRun = DidUpdate()
+        && !packageHash.empty()
+        && hstring(packageHash) == co_await CodePushPackage::GetCurrentPackageHashAsync();
+    promise.Resolve(isFirstRun);
+}
+
 void CodePush::CodePush::NotifyApplicationReady(ReactPromise<JSValue>&& promise) noexcept
 {
     try {
@@ -521,7 +534,8 @@ winrt::fire_and_forget CodePush::CodePush::DownloadUpdate(JSValueObject updatePa
         downloadFile.DeleteAsync();
 
         auto relativeBundlePath1{ co_await FindFilePathAsync(unzippedFolder, L"index.windows.bundle") };
-        auto relativeBundlePath{ path(newUpdateHash) / std::wstring_view(relativeBundlePath1) };
+        //auto relativeBundlePath{ path(newUpdateHash) / std::wstring_view(relativeBundlePath1) };
+        path relativeBundlePath{ std::wstring_view(relativeBundlePath1) };
 
         co_await unzippedFolder.RenameAsync(to_hstring(newUpdateHash), NameCollisionOption::ReplaceExisting);
         newUpdateFolder = unzippedFolder;
