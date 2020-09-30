@@ -105,7 +105,7 @@ namespace CodePush
 		void RestartApp(bool onlyIfUpdateIsPending, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
 
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void isFirstRun(winrt::Microsoft::ReactNative::ReactPromise<bool>) noexcept;
+		winrt::fire_and_forget IsFirstRun(std::wstring packageHash, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept;
 
 		REACT_METHOD(NotifyApplicationReady, L"notifyApplicationReady");
 		void NotifyApplicationReady(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
