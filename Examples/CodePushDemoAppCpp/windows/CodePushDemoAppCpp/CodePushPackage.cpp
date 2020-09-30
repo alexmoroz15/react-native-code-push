@@ -74,7 +74,7 @@ IAsyncOperation<JsonObject> GetCurrentPackageInfo()
 	*/
 }
 
-IAsyncOperation<winrt::hstring> GetCurrentPackageHash()
+IAsyncOperation<winrt::hstring> CodePush::CodePushPackage::GetCurrentPackageHashAsync()
 {
 	auto info = co_await GetCurrentPackageInfo();
 	if (info == nullptr)
@@ -147,7 +147,7 @@ IAsyncOperation<JsonObject> GetPackage(winrt::hstring& packageHash)
 
 IAsyncOperation<hstring> CodePush::CodePushPackage::GetCurrentPackageFolderPathAsync()
 {
-	auto packageHash{ co_await GetCurrentPackageHash() };
+	auto packageHash{ co_await GetCurrentPackageHashAsync() };
 	auto currentPackageFolderPath{ GetPackageFolderPath(packageHash) };
 	hstring currentPackageFolderString{ currentPackageFolderPath.c_str() };
 	co_return currentPackageFolderString;
@@ -155,7 +155,7 @@ IAsyncOperation<hstring> CodePush::CodePushPackage::GetCurrentPackageFolderPathA
 
 IAsyncOperation<JsonObject> CodePush::CodePushPackage::GetCurrentPackageAsync()
 {
-	auto packageHash = co_await GetCurrentPackageHash();
+	auto packageHash = co_await GetCurrentPackageHashAsync();
 	if (packageHash.empty())
 	{
 		co_return nullptr;

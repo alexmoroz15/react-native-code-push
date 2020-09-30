@@ -14,5 +14,7 @@ namespace CodePush
 
 		static winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Data::Json::JsonObject> GetPreviousPackageAsync();
 		static winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetPreviousPackageFolderPathAsync();
+
+		static winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetCurrentPackageHashAsync();
 	};
 }
