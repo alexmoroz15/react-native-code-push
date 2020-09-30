@@ -2,20 +2,19 @@
 
 #include "NativeModules.h"
 #include "winrt/Windows.Data.Json.h"
+#include <filesystem>
 
 namespace CodePush
 {
-	enum class CodePushUpdateState
-	{
-		Running,
-		Pending,
-		Latest
-	};
+	using JsonObject = winrt::Windows::Data::Json::JsonObject;
+	using path = std::filesystem::path;
+	using wstring = std::wstring;
 
 	REACT_MODULE(CodePush);
 	struct CodePush
 	{
 	private:
+		/*
 		const std::wstring PendingUpdatekey{ L"CODE_PUSH_PENDING_UPDATE" };
 
 		const std::wstring PendingUpdateHashKey{ L"hash" };
@@ -45,6 +44,7 @@ namespace CodePush
 		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile();
 		winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> GetJSBundleFile(winrt::hstring assetsBundleFileName);
 		void SetJSBundleFile(winrt::hstring latestJSBundleFile);
+		*/
 
 	public:
 		enum class CodePushInstallMode
@@ -62,6 +62,40 @@ namespace CodePush
 			LATEST = 2
 		};
 
+		path GetBinaryBundlePath();
+		path GetBundlePath();
+		path GetApplicationSupportDirectory();
+		path GetBundleAssetsPath();
+
+		void OverrideAppVersion(wstring appVersion);
+		void SetDeploymentKey(wstring deploymentKey);
+
+		bool IsFailedHash(wstring packageHash);
+
+		JsonObject GetRollbackInfo();
+		void SetLatestRollbackInfo(wstring packageHash);
+		int GetRollbackCountForPackage(wstring packageHash, JsonObject latestRollbackInfo);
+
+		bool IsPendingUpdate(wstring packageHash);
+
+		bool IsUsingTestConfiguration();
+		void SetUsingTestConfiguration();
+		void ClearUpdates();
+
+		REACT_CONSTANT_PROVIDER(GetConstants);
+		void GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
+		{
+			constants.Add(L"codePushInstallModeImmediate", CodePushInstallMode::IMMEDIATE);
+			constants.Add(L"codePushInstallModeOnNextRestart", CodePushInstallMode::ON_NEXT_RESTART);
+			constants.Add(L"codePushInstallModeOnNextResume", CodePushInstallMode::ON_NEXT_RESUME);
+			constants.Add(L"codePushInstallModeOnNextSuspend", CodePushInstallMode::ON_NEXT_SUSPEND);
+
+			constants.Add(L"codePushUpdateStateRunning", CodePushUpdateState::RUNNING);
+			constants.Add(L"codePushUpdateStatePending", CodePushUpdateState::PENDING);
+			constants.Add(L"codePushUpdateStateLatest", CodePushUpdateState::LATEST);
+		}
+
+		/*
 		// Synchronous functions are not allowed on the UI thread.
 		// Incidentally, the application is initialized and the bundle loaded by the UI thread.
 		static winrt::hstring GetJSBundleFileSync();
@@ -120,5 +154,6 @@ namespace CodePush
 
 		REACT_METHOD(ClearPendingRestart, L"clearPendingRestart");
 		void ClearPendingRestart(winrt::Microsoft::ReactNative::ReactPromise<void> promise) noexcept;
+		*/
 	};
 }
