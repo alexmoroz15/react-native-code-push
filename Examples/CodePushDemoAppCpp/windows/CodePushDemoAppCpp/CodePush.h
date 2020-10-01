@@ -10,9 +10,16 @@ namespace CodePush
 	using path = std::filesystem::path;
 	using wstring = std::wstring;
 
+	using ReactNativeHost = winrt::Microsoft::ReactNative::ReactNativeHost;
+	using ReactContext = winrt::Microsoft::ReactNative::ReactContext;
+
+	using DateTime = winrt::Windows::Foundation::DateTime;
+
 	REACT_MODULE(CodePush);
 	struct CodePush
 	{
+		enum class CodePushInstallMode;
+
 	private:
 		/*
 		const std::wstring PendingUpdatekey{ L"CODE_PUSH_PENDING_UPDATE" };
@@ -46,6 +53,72 @@ namespace CodePush
 		void SetJSBundleFile(winrt::hstring latestJSBundleFile);
 		*/
 
+		bool m_hasResumeListener;
+		bool m_isFirstRunAfterUpdate;
+		int m_minimumBackgroundDuration;
+		DateTime m_lastResignedDate;
+		CodePushInstallMode _installMode;
+		// Don't know what to replace this with.
+		//NSTimer* _appSuspendTimer;
+
+		// Used to coordinate the dispatching of download progress events to JS.
+		uint64_t m_latestExpectedContentLength;
+		uint64_t m_latestReceivedConentLength;
+		bool m_didUpdateProgress;
+
+		bool m_allowed{ true };
+		bool m_restartInProgress{ false };
+		std::vector<uint8_t> m_restartQueue;
+
+
+
+		// These constants represent emitted events
+		const wstring DownloadProgressEvent{ L"CodePushDownloadProgress" };
+
+		// These constants represent valid deployment statuses
+		const wstring DeploymentFailed{ L"DeploymentFailed" };
+		const wstring DeploymentSucceeded{ L"DeploymentSucceeded" };
+
+		// These keys represent the names we use to store data in NSUserDefaults
+		// For Windows, NSUserDefaults is replaced with LocalSettings
+		const wstring FailedUpdatesKey{ L"CODE_PUSH_FAILED_UPDATES" };
+		const wstring PendingUpdateKey{ L"CODE_PUSH_PENDING_UPDATE" };
+
+		// These keys are already "namespaced" by the PendingUpdateKey, so
+		// their values don't need to be obfuscated to prevent collision with app data
+		const wstring PendingUpdateHashKey{ L"hash" };
+		const wstring PendingUpdateIsLoadingKey{ L"isLoading" };
+
+		// These keys are used to inspect/augment the metadata
+		// that is associated with an update's package.
+		const wstring AppVersionKey{ L"appVersion" };
+		const wstring BinaryBundleDateKey{ L"binaryDate" };
+		const wstring PackageHashKey{ L"packageHash" };
+		const wstring PackageIsPendingKey{ L"isPending" };
+
+
+		bool isRunningBinaryVersion{ false };
+		bool needToReportRollback{ false };
+		bool testConfigurationFlag{ false };
+
+		// These values are used to save the NS bundle, name, extension and subdirectory
+		// for the JS bundle in the binary.
+		// I won't be doing this.
+		/*
+		static NSBundle* bundleResourceBundle = nil;
+		static NSString* bundleResourceExtension = @"jsbundle";
+		static NSString* bundleResourceName = @"main";
+		static NSString* bundleResourceSubdirectory = nil;
+		*/
+		ReactNativeHost m_host;
+		ReactContext m_context;
+
+		// These keys represent the names we use to store information about the latest rollback
+		const wstring LatestRollbackInfoKey{ L"LATEST_ROLLBACK_INFO" };
+		const wstring LatestRollbackPackageHashKey{ L"packageHash" };
+		const wstring LatestRollbackTimeKey{ L"time" };
+		const wstring LatestRollbackCountKey{ L"count" };
+
 	public:
 		enum class CodePushInstallMode
 		{
@@ -62,10 +135,15 @@ namespace CodePush
 			LATEST = 2
 		};
 
-		path GetBinaryBundlePath();
-		path GetBundlePath();
-		path GetApplicationSupportDirectory();
+		static path GetBinaryBundlePath();
+		static winrt::Windows::Foundation::IAsyncOperation<path> GetBundlePathAsync();
+		static path GetBundlePath();
+
+		// Not sure exactly why these methods exist
+		/*
+		StorageFolder GetLocalStorageFolder();
 		path GetBundleAssetsPath();
+		*/
 
 		void OverrideAppVersion(wstring appVersion);
 		void SetDeploymentKey(wstring deploymentKey);
@@ -81,6 +159,9 @@ namespace CodePush
 		bool IsUsingTestConfiguration();
 		void SetUsingTestConfiguration();
 		void ClearUpdates();
+
+		REACT_INIT(Initialize);
+		void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;
 
 		REACT_CONSTANT_PROVIDER(GetConstants);
 		void GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
@@ -115,7 +196,6 @@ namespace CodePush
 
 		REACT_INIT(Initialize);
 		void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;
-		
 
 		REACT_METHOD(Allow, L"allow");
 		void Allow(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>&& promise) noexcept;
