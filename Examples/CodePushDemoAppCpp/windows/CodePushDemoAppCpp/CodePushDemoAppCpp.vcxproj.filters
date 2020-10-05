@@ -24,6 +24,9 @@
     <ClCompile Include="miniz.c">
       <Filter>Miniz</Filter>
     </ClCompile>
+    <ClCompile Include="CodePushConfig.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -41,6 +44,18 @@
     </ClInclude>
     <ClInclude Include="miniz.h">
       <Filter>Miniz</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushConfig.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushDownloadHandler.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushUpdateUtils.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushTelemetryManager.h">
+      <Filter>CodePush</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

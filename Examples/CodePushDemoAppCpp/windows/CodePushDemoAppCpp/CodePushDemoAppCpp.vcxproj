@@ -101,7 +101,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CodePush.h" />
+    <ClInclude Include="CodePushConfig.h" />
+    <ClInclude Include="CodePushDownloadHandler.h" />
     <ClInclude Include="CodePushPackage.h" />
+    <ClInclude Include="CodePushTelemetryManager.h" />
+    <ClInclude Include="CodePushUpdateUtils.h" />
     <ClInclude Include="CodePushUtils.h" />
     <ClInclude Include="miniz.h" />
     <ClInclude Include="ReactPackageProvider.h" />
@@ -132,6 +136,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CodePush.cpp" />
+    <ClCompile Include="CodePushConfig.cpp" />
     <ClCompile Include="CodePushPackage.cpp" />
     <ClCompile Include="CodePushUtils.cpp" />
     <ClCompile Include="miniz.c">
