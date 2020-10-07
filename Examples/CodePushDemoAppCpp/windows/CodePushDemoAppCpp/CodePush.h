@@ -2,7 +2,11 @@
 
 #include "NativeModules.h"
 #include "winrt/Windows.Data.Json.h"
+#include "winrt/Windows.Storage.h"
+
 #include <filesystem>
+
+#include "CodePushUtils.h"
 
 // Helper functions for reading and sending JsonValues to and from JavaScript
 namespace winrt::Microsoft::ReactNative
@@ -17,6 +21,7 @@ namespace CodePush
 	using namespace winrt;
 	using namespace Windows::Data::Json;
 	using namespace Windows::Foundation;
+	using namespace Windows::Storage;
 	using namespace Microsoft::ReactNative;
 
 	using namespace std;
@@ -95,6 +100,9 @@ namespace CodePush
 		const wstring LatestRollbackTimeKey{ L"time" };
 		const wstring LatestRollbackCountKey{ L"count" };
 
+		void LoadBundle();
+		void RestartAppInternal(bool onlyIfUpdateIsPending);
+
 	public:
 		enum class CodePushInstallMode
 		{
@@ -112,7 +120,7 @@ namespace CodePush
 		};
 
 		static path GetBinaryBundlePath();
-		static IAsyncOperation<path> GetBundlePathAsync();
+		static IAsyncOperation<StorageFile> GetBundleFileAsync();
 		static path GetBundlePath();
 
 		// Not sure exactly why these methods exist
@@ -140,23 +148,13 @@ namespace CodePush
 		void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;
 
 		REACT_CONSTANT_PROVIDER(GetConstants);
-		void GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
-		{
-			constants.Add(L"codePushInstallModeImmediate", CodePushInstallMode::IMMEDIATE);
-			constants.Add(L"codePushInstallModeOnNextRestart", CodePushInstallMode::ON_NEXT_RESTART);
-			constants.Add(L"codePushInstallModeOnNextResume", CodePushInstallMode::ON_NEXT_RESUME);
-			constants.Add(L"codePushInstallModeOnNextSuspend", CodePushInstallMode::ON_NEXT_SUSPEND);
-
-			constants.Add(L"codePushUpdateStateRunning", CodePushUpdateState::RUNNING);
-			constants.Add(L"codePushUpdateStatePending", CodePushUpdateState::PENDING);
-			constants.Add(L"codePushUpdateStateLatest", CodePushUpdateState::LATEST);
-		}
+		void GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept;
 
 		/*
 		 * This is native-side of the RemotePackage.download method
 		 */
 		REACT_METHOD(DownloadUpdateAsync, L"downloadUpdate");
-		fire_and_forget DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept { co_return; }
+		fire_and_forget DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept;
 
         /*
          * This is the native side of the CodePush.getConfiguration method. It isn't
@@ -165,60 +163,60 @@ namespace CodePush
          * app version, as well as the deployment key that was configured in the Info.plist file.
          */
 		REACT_METHOD(GetConfiguration, L"getConfiguration");
-		void GetConfiguration(ReactPromise<JsonObject> promise) noexcept {}
+		void GetConfiguration(ReactPromise<JsonObject> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.getUpdateMetadata method.
          */
 		REACT_METHOD(GetUpdateMetadataAsync, L"getUpdateMetadata");
-		fire_and_forget GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<JsonObject> promise) noexcept { co_return; }
+		fire_and_forget GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<JsonObject> promise) noexcept;
 
         /*
          * This method is the native side of the LocalPackage.install method.
          */
 		REACT_METHOD(InstallUpdateAsync, L"installUpdate");
-        fire_and_forget InstallUpdateAsync(JsonObject updatePackage, CodePushInstallMode installMode, int minimumBackgroundDuration, ReactPromise<void> promise) noexcept { co_return; }
+		fire_and_forget InstallUpdateAsync(JsonObject updatePackage, CodePushInstallMode installMode, int minimumBackgroundDuration, ReactPromise<void> promise) noexcept;
 
         /*
          * This method isn't publicly exposed via the "react-native-code-push"
          * module, and is only used internally to populate the RemotePackage.failedInstall property.
          */
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept {}
+		void IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept;
 
 		REACT_METHOD(SetLatestRollbackInfo, L"setLatestRollbackInfo");
-		void SetLatestRollbackInfo(wstring packageHash) noexcept {}
+		void SetLatestRollbackInfo(wstring packageHash) noexcept;
 
 		REACT_METHOD(GetLatestRollbackInfo, L"getLatestRollbackInfo");
-		void GetLatestRollbackInfo(ReactPromise<JsonObject> promise) noexcept {}
+		void GetLatestRollbackInfo(ReactPromise<JsonObject> promise) noexcept;
 
         /*
          * This method isn't publicly exposed via the "react-native-code-push"
          * module, and is only used internally to populate the LocalPackage.isFirstRun property.
          */
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept {}
+		void IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.notifyApplicationReady() method.
          */
 		REACT_METHOD(NotifyApplicationReady, L"notifyApplicationReady");
-		void NotifyApplicationReady() noexcept {}
+		void NotifyApplicationReady() noexcept;
 
 		REACT_METHOD(Allow, L"allow");
-		void Allow() noexcept {}
+		void Allow() noexcept;
 
 		REACT_METHOD(ClearPendingRestart, L"clearPendingRestart");
-		void ClearPendingRestart() noexcept {}
+		void ClearPendingRestart() noexcept;
 
 		REACT_METHOD(Disallow, L"disallow");
-		void Disallow() noexcept {}
+		void Disallow() noexcept;
 
         /*
          * This method is the native side of the CodePush.restartApp() method.
          */
 		REACT_METHOD(RestartApp, L"restartApp");
-		void RestartApp(bool onlyIfUpdateIsPending) noexcept {}
+		void RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue> promise) noexcept;
 
         /*
          * This method clears CodePush's downloaded updates.
@@ -227,7 +225,7 @@ namespace CodePush
          * automatically when needed in other cases) as it could lead to unpredictable behavior.
          */
 		REACT_METHOD(ClearUpdates, L"clearUpdates");
-		void ClearUpdates() noexcept {}
+		void ClearUpdates() noexcept;
 
     // #pragma mark - JavaScript-exported module methods (Private)
 
@@ -238,20 +236,20 @@ namespace CodePush
          * configuration flag is not set.
          */
 		REACT_METHOD(DownloadAndReplaceCurrentBundle, L"downloadAndReplaceCurrentBundle");
-		void DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept {}
+		void DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept;
 
         /*
          * This method is checks if a new status update exists (new version was installed,
          * or an update failed) and return its details (version label, status).
          */
 		REACT_METHOD(GetNewStatusReport, L"getNewStatusReport");
-		void GetNewStatusReport(ReactPromise<JsonObject> promise) noexcept {}
+		void GetNewStatusReport(ReactPromise<JsonObject> promise) noexcept;
 
 		REACT_METHOD(RecordStatusReported, L"recordStatusReported");
-		void RecordStatusReported(JsonObject statusReport) noexcept {}
+		void RecordStatusReported(JsonObject statusReport) noexcept;
 
 		REACT_METHOD(SaveStatusReportForRetry, L"saveStatusReportForRetry");
-		void SaveStatusReportForRetry(JsonObject statusReport) noexcept {}
+		void SaveStatusReportForRetry(JsonObject statusReport) noexcept;
 
 	};
 }
