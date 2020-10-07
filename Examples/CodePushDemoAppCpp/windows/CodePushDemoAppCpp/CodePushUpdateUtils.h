@@ -64,7 +64,7 @@ namespace CodePush
         static wstring AssetsFolderName();
         static wstring GetHashForBinaryContents(StorageFile& binaryBundle);
         static wstring ManifestFolderPrefix();
-        static wstring ModifiedDateStringOfFileAtUrl(path fileUrl);
+        static wstring ModifiedDateStringOfFileAtPath(path fileUrl);
         static bool IsHashIgnoredFor(path relativePath);
         static bool VerifyFolderHash(StorageFolder& finalUpdateFolder, const wstring& expectedHash);
 

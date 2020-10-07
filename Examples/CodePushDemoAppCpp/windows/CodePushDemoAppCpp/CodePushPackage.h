@@ -71,11 +71,11 @@ namespace CodePush
 			int doneCallback,
 			int failCallback);
 
-		IAsyncOperation<JsonObject> GetCurrentPackageAsync();
-		IAsyncOperation<JsonObject> GetPreviousPackageAsync();
-		IAsyncOperation<path> GetCurrentPackageFolderPathAsync();
-		IAsyncOperation<path> GetCurrentPackageBundlePathAsync();
-		IAsyncOperation<wstring> GetCurrentPackageHashAsync();
+		static IAsyncOperation<JsonObject> GetCurrentPackageAsync();
+		static IAsyncOperation<JsonObject> GetPreviousPackageAsync();
+		static IAsyncOperation<path> GetCurrentPackageFolderPathAsync();
+		static IAsyncOperation<path> GetCurrentPackageBundlePathAsync();
+		static IAsyncOperation<wstring> GetCurrentPackageHashAsync();
 
 		IAsyncOperation<JsonObject> GetPackageAsync(wstring packageHash);
 

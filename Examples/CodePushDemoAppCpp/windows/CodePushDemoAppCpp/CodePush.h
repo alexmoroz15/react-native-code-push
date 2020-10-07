@@ -6,8 +6,6 @@
 
 #include <filesystem>
 
-#include "CodePushUtils.h"
-
 // Helper functions for reading and sending JsonValues to and from JavaScript
 namespace winrt::Microsoft::ReactNative
 {
@@ -204,13 +202,13 @@ namespace CodePush
 		void NotifyApplicationReady() noexcept;
 
 		REACT_METHOD(Allow, L"allow");
-		void Allow() noexcept;
+		void Allow(ReactPromise<JSValue> promise) noexcept;
 
 		REACT_METHOD(ClearPendingRestart, L"clearPendingRestart");
 		void ClearPendingRestart() noexcept;
 
 		REACT_METHOD(Disallow, L"disallow");
-		void Disallow() noexcept;
+		void Disallow(ReactPromise<JSValue> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.restartApp() method.
@@ -242,8 +240,8 @@ namespace CodePush
          * This method is checks if a new status update exists (new version was installed,
          * or an update failed) and return its details (version label, status).
          */
-		REACT_METHOD(GetNewStatusReport, L"getNewStatusReport");
-		void GetNewStatusReport(ReactPromise<JsonObject> promise) noexcept;
+		REACT_METHOD(GetNewStatusReportAsync, L"getNewStatusReport");
+		fire_and_forget GetNewStatusReportAsync(ReactPromise<JsonObject> promise) noexcept;
 
 		REACT_METHOD(RecordStatusReported, L"recordStatusReported");
 		void RecordStatusReported(JsonObject statusReport) noexcept;

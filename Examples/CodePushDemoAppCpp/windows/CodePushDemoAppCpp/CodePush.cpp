@@ -2,7 +2,10 @@
 
 #include "CodePush.h"
 #include "CodePushUtils.h"
+#include "CodePushUpdateUtils.h"
 #include "CodePushPackage.h"
+#include "CodePushTelemetryManager.h"
+#include "CodePushConfig.h"
 #include "App.h"
 
 #include <winrt/Windows.Data.Json.h>
@@ -58,25 +61,6 @@ void CodePush::CodePush::LoadBundle()
         });
 }
 
-/*
--(void)loadBundle
-{
-    // This needs to be async dispatched because the bridge is not set on init
-    // when the app first starts, therefore rollbacks will not take effect.
-    dispatch_async(dispatch_get_main_queue(), ^ {
-        // If the current bundle URL is using http(s), then assume the dev
-        // is debugging and therefore, shouldn't be redirected to a local
-        // file (since Chrome wouldn't support it). Otherwise, update
-        // the current bundle URL to point at the latest update
-        if ([CodePush isUsingTestConfiguration] || ![super.bridge.bundleURL.scheme hasPrefix : @"http"]) {
-            [super.bridge setValue : [CodePush bundleURL] forKey : @"bundleURL"] ;
-        }
-
-        [super.bridge reload];
-        });
-}
-*/
-
 void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
 {
     if (m_restartInProgress)
@@ -108,35 +92,6 @@ void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
     }
 }
 
-/*
-- (void)restartAppInternal:(BOOL)onlyIfUpdateIsPending
-{
-    if (_restartInProgress) {
-        CPLog(@"Restart request queued until the current restart is completed.");
-        [_restartQueue addObject:@(onlyIfUpdateIsPending)];
-        return;
-    } else if (!_allowed) {
-        CPLog(@"Restart request queued until restarts are re-allowed.");
-        [_restartQueue addObject:@(onlyIfUpdateIsPending)];
-        return;
-    }
-
-    _restartInProgress = YES;
-    if (!onlyIfUpdateIsPending || [[self class] isPendingUpdate:nil]) {
-        [self loadBundle];
-        CPLog(@"Restarting app.");
-        return;
-    }
-
-    _restartInProgress = NO;
-    if ([_restartQueue count] > 0) {
-        BOOL buf = [_restartQueue valueForKey: @"@firstObject"];
-        [_restartQueue removeObjectAtIndex:0];
-        [self restartAppInternal:buf];
-    }
-}
-        */
-
 void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
@@ -160,7 +115,167 @@ void CodePush::CodePush::GetConstants(winrt::Microsoft::ReactNative::ReactConsta
 /*
  * This is native-side of the RemotePackage.download method
  */
-fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept { co_return; }
+fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept 
+{
+    auto mutableUpdatePackage{ updatePackage };
+
+    auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
+
+    wstring_view newUpdateHash{ updatePackage.GetNamedString(L"packageHash") };
+    StorageFolder newUpdateFolder{ nullptr };
+
+    auto downloadUrl{ updatePackage.GetNamedString(L"downloadUrl") };
+    const uint32_t BufferSize{ 8 * 1024 };
+
+    HttpClient client;
+    auto headers{ client.DefaultRequestHeaders() };
+    headers.Append(L"Accept-Encoding", L"identity");
+
+    auto downloadFile{ co_await storageFolder.CreateFileAsync(L"download.zip", Windows::Storage::CreationCollisionOption::ReplaceExisting) };
+
+    HttpRequestMessage reqm{ HttpMethod::Get(), Uri(downloadUrl) };
+    auto resm{ co_await client.SendRequestAsync(reqm, HttpCompletionOption::ResponseHeadersRead) };
+    auto totalBytes{ resm.Content().Headers().ContentLength().GetInt64() };
+    auto inputStream{ co_await resm.Content().ReadAsInputStreamAsync() };
+    auto outputStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::ReadWrite) };
+
+    bool isZip{ true };
+
+    UINT64 receivedBytes{ 0 };
+    for (;;)
+    {
+        auto outputBuffer{ co_await inputStream.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
+
+        if (outputBuffer.Length() == 0)
+        {
+            break;
+        }
+        co_await outputStream.WriteAsync(outputBuffer);
+
+        receivedBytes += outputBuffer.Length();
+
+        if (notifyProgress)
+        {
+            m_context.CallJSFunction(
+                L"RCTDeviceEventEmitter",
+                L"emit",
+                L"CodePushDownloadProgress",
+                JSValueObject{
+                    {"totalBytes", totalBytes },
+                    {"receivedBytes", receivedBytes } });
+        }
+    }
+
+    inputStream.Close();
+    outputStream.Close();
+
+    if (isZip)
+    {
+        auto unzippedFolderName{ L"unzipped" };
+        auto unzippedFolder = co_await storageFolder.CreateFolderAsync(unzippedFolderName, CreationCollisionOption::ReplaceExisting);
+        co_await UnzipAsync(downloadFile, unzippedFolder);
+        downloadFile.DeleteAsync();
+
+        auto relativeBundlePath1{ co_await FindFilePathAsync(unzippedFolder, L"index.windows.bundle") };
+        auto relativeBundlePath{ path(newUpdateHash) / std::wstring_view(relativeBundlePath1) };
+
+        co_await unzippedFolder.RenameAsync(newUpdateHash, NameCollisionOption::ReplaceExisting);
+        newUpdateFolder = unzippedFolder;
+
+        //mutableUpdatePackage["bundlePath"] = to_string(relativeBundlePath.wstring());
+        mutableUpdatePackage.Insert(L"bundlePath", JsonValue::CreateStringValue(relativeBundlePath.wstring()));
+        promise.Resolve(mutableUpdatePackage);
+    }
+    else
+    {
+        // Rename the file
+        co_await downloadFile.RenameAsync(L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
+    }
+
+    auto newUpdateMetadataPath{ path(newUpdateHash) / "CodePush" / "assets" / "app.json" };
+    auto newUpdateMetadataFile{ co_await CreateFileFromPathAsync(storageFolder, newUpdateMetadataPath) };
+
+    co_await FileIO::WriteTextAsync(newUpdateMetadataFile, mutableUpdatePackage.Stringify());
+
+    co_return;
+
+    /*
+    auto mutableUpdatePackage{ updatePackage };
+    path binaryBundlePath{ GetBinaryBundlePath() };
+    if (!binaryBundlePath.empty())
+    {
+        mutableUpdatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(CodePushUpdateUtils::ModifiedDateStringOfFileAtPath(binaryBundlePath)));
+    }
+
+    co_return;
+    */
+}
+
+/*
+RCT_EXPORT_METHOD(downloadUpdate:(NSDictionary*)updatePackage
+                  notifyProgress:(BOOL)notifyProgress
+                        resolver:(RCTPromiseResolveBlock)resolve
+                        rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *mutableUpdatePackage = [updatePackage mutableCopy];
+    NSURL *binaryBundleURL = [CodePush binaryBundleURL];
+    if (binaryBundleURL != nil) {
+        [mutableUpdatePackage setValue:[CodePushUpdateUtils modifiedDateStringOfFileAtURL:binaryBundleURL]
+                                forKey:BinaryBundleDateKey];
+    }
+
+    if (notifyProgress) {
+        // Set up and unpause the frame observer so that it can emit
+        // progress events every frame if the progress is updated.
+        _didUpdateProgress = NO;
+        self.paused = NO;
+    }
+
+    NSString * publicKey = [[CodePushConfig current] publicKey];
+
+    [CodePushPackage
+        downloadPackage:mutableUpdatePackage
+        expectedBundleFileName:[bundleResourceName stringByAppendingPathExtension:bundleResourceExtension]
+        publicKey:publicKey
+        operationQueue:_methodQueue
+        // The download is progressing forward
+        progressCallback:^(long long expectedContentLength, long long receivedContentLength) {
+            // Update the download progress so that the frame observer can notify the JS side
+            _latestExpectedContentLength = expectedContentLength;
+            _latestReceivedConentLength = receivedContentLength;
+            _didUpdateProgress = YES;
+
+            // If the download is completed, stop observing frame
+            // updates and synchronously send the last event.
+            if (expectedContentLength == receivedContentLength) {
+                _didUpdateProgress = NO;
+                self.paused = YES;
+                [self dispatchDownloadProgressEvent];
+            }
+        }
+        // The download completed
+        doneCallback:^{
+            NSError *err;
+            NSDictionary *newPackage = [CodePushPackage getPackage:mutableUpdatePackage[PackageHashKey] error:&err];
+
+            if (err) {
+                return reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
+            }
+            resolve(newPackage);
+        }
+        // The download failed
+        failCallback:^(NSError *err) {
+            if ([CodePushErrorUtils isCodePushError:err]) {
+                [self saveFailedUpdate:mutableUpdatePackage];
+            }
+
+            // Stop observing frame updates if the download fails.
+            _didUpdateProgress = NO;
+            self.paused = YES;
+            reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
+        }];
+}
+*/
 
 /*
  * This is the native side of the CodePush.getConfiguration method. It isn't
@@ -201,11 +316,30 @@ void CodePush::CodePush::IsFirstRun(wstring packageHash, ReactPromise<bool> prom
  */
 void CodePush::CodePush::NotifyApplicationReady() noexcept {}
 
-void CodePush::CodePush::Allow() noexcept {}
+void CodePush::CodePush::Allow(ReactPromise<JSValue> promise) noexcept 
+{
+    CodePushUtils::Log(L"Re-allowing restarts.");
+    m_allowed = true;
+
+    if (m_restartQueue.size() > 0)
+    {
+        CodePushUtils::Log(L"Executing pending restart.");
+        auto buf{ m_restartQueue[0] };
+        m_restartQueue.erase(m_restartQueue.begin());
+        RestartAppInternal(buf);
+    }
+
+    promise.Resolve(JSValue::Null);
+}
 
 void CodePush::CodePush::ClearPendingRestart() noexcept {}
 
-void CodePush::CodePush::Disallow() noexcept {}
+void CodePush::CodePush::Disallow(ReactPromise<JSValue> promise) noexcept
+{
+    CodePushUtils::Log(L"Disallowing restarts.");
+    m_allowed = false;
+    promise.Resolve(JSValue::Null);
+}
 
 /*
  * This method is the native side of the CodePush.restartApp() method.
@@ -238,7 +372,78 @@ void CodePush::CodePush::DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl
  * This method is checks if a new status update exists (new version was installed,
  * or an update failed) and return its details (version label, status).
  */
-void CodePush::CodePush::GetNewStatusReport(ReactPromise<JsonObject> promise) noexcept {}
+fire_and_forget CodePush::CodePush::GetNewStatusReportAsync(ReactPromise<JsonObject> promise) noexcept 
+{
+    /*
+    if (needToReportRollback)
+    {
+        needToReportRollback = false;
+        // save stuff to LocalSettings
+    }
+    else if (m_isFirstRunAfterUpdate)
+    {
+        auto currentPackage = co_await CodePushPackage::GetCurrentPackageAsync();
+        promise.Resolve(CodePushTelemetryManager::GetUpdateReport(currentPackage));
+        co_return;
+    }
+    else if (isRunningBinaryVersion)
+    {
+        auto appVersion{ CodePushConfig::Current().GetAppVersion() };
+        promise.Resolve(CodePushTelemetryManager::GetBinaryUpdateReport(appVersion));
+        co_return;
+    }
+    else
+    {
+        auto retryStatusReport{ CodePushTelemetryManager::GetRetryStatusReport() };
+        if (retryStatusReport != nullptr)
+        {
+            promise.Resolve(retryStatusReport);
+            co_return;
+        }
+    }
+    */
+
+    promise.Resolve(JsonObject{});
+    co_return;
+}
+
+/*
+RCT_EXPORT_METHOD(getNewStatusReport:(RCTPromiseResolveBlock)resolve
+                            rejecter:(RCTPromiseRejectBlock)reject)
+{
+    if (needToReportRollback) {
+        needToReportRollback = NO;
+        NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
+        NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
+        if (failedUpdates) {
+            NSDictionary *lastFailedPackage = [failedUpdates lastObject];
+            if (lastFailedPackage) {
+                resolve([CodePushTelemetryManager getRollbackReport:lastFailedPackage]);
+                return;
+            }
+        }
+    } else if (_isFirstRunAfterUpdate) {
+        NSError *error;
+        NSDictionary *currentPackage = [CodePushPackage getCurrentPackage:&error];
+        if (!error && currentPackage) {
+            resolve([CodePushTelemetryManager getUpdateReport:currentPackage]);
+            return;
+        }
+    } else if (isRunningBinaryVersion) {
+        NSString *appVersion = [[CodePushConfig current] appVersion];
+        resolve([CodePushTelemetryManager getBinaryUpdateReport:appVersion]);
+        return;
+    } else {
+        NSDictionary *retryStatusReport = [CodePushTelemetryManager getRetryStatusReport];
+        if (retryStatusReport) {
+            resolve(retryStatusReport);
+            return;
+        }
+    }
+
+    resolve(nil);
+}
+*/
 
 void CodePush::CodePush::RecordStatusReported(JsonObject statusReport) noexcept {}
 

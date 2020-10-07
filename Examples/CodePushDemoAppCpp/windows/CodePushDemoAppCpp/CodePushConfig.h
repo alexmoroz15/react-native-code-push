@@ -34,6 +34,6 @@ namespace CodePush
 		wstring GetPublicKey() { return publicKey; }
 		void SetPublicKey(wstring _publicKey) { publicKey = _publicKey; }
 
-		CodePushConfig Current();
+		static CodePushConfig Current();
 	};
 }
