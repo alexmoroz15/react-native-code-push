@@ -36,7 +36,10 @@ using namespace std::filesystem;
 void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
-    m_host = g_host;
+    
+    auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
+    m_host = res.as<ReactNativeHost>();
+    //m_host = g_host;
 }
 
 // Helper functions for reading and sending JsonValues to and from JavaScript

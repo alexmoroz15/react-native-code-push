@@ -6,12 +6,12 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   IgnorableNamespaces="uap mp">
 
- <Identity
-    Name="8c70712a-cc60-46d5-8fd8-4e8bc6f8efc9"
+  <Identity
+    Name="bd8be20e-1e17-4299-8d0e-5862cc4428a8"
     Publisher="CN=Aleksey"
     Version="1.0.0.0" />
 
-  <mp:PhoneIdentity PhoneProductId="8c70712a-cc60-46d5-8fd8-4e8bc6f8efc9" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="bd8be20e-1e17-4299-8d0e-5862cc4428a8" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>CodePushDemoAppCpp</DisplayName>
@@ -28,7 +28,8 @@
   </Resources>
 
   <Applications>
-    <Application Id="App"
+    <Application
+      Id="App"
       Executable="$targetnametoken$.exe"
       EntryPoint="CodePushDemoAppCpp.App">
       <uap:VisualElements

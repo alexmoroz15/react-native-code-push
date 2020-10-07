@@ -12,19 +12,19 @@
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="ReactPackageProvider.cpp" />
     <ClCompile Include="AutolinkedNativeModules.g.cpp" />
+    <ClCompile Include="miniz.c">
+      <Filter>miniz</Filter>
+    </ClCompile>
     <ClCompile Include="CodePush.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
-    <ClCompile Include="CodePushUtils.cpp">
+    <ClCompile Include="CodePushConfig.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
     <ClCompile Include="CodePushPackage.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
-    <ClCompile Include="miniz.c">
-      <Filter>Miniz</Filter>
-    </ClCompile>
-    <ClCompile Include="CodePushConfig.cpp">
+    <ClCompile Include="CodePushUtils.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
   </ItemGroup>
@@ -33,17 +33,11 @@
     <ClInclude Include="App.h" />
     <ClInclude Include="ReactPackageProvider.h" />
     <ClInclude Include="AutolinkedNativeModules.g.h" />
+    <ClInclude Include="miniz.h">
+      <Filter>miniz</Filter>
+    </ClInclude>
     <ClInclude Include="CodePush.h">
       <Filter>CodePush</Filter>
-    </ClInclude>
-    <ClInclude Include="CodePushUtils.h">
-      <Filter>CodePush</Filter>
-    </ClInclude>
-    <ClInclude Include="CodePushPackage.h">
-      <Filter>CodePush</Filter>
-    </ClInclude>
-    <ClInclude Include="miniz.h">
-      <Filter>Miniz</Filter>
     </ClInclude>
     <ClInclude Include="CodePushConfig.h">
       <Filter>CodePush</Filter>
@@ -51,10 +45,16 @@
     <ClInclude Include="CodePushDownloadHandler.h">
       <Filter>CodePush</Filter>
     </ClInclude>
-    <ClInclude Include="CodePushUpdateUtils.h">
+    <ClInclude Include="CodePushPackage.h">
       <Filter>CodePush</Filter>
     </ClInclude>
     <ClInclude Include="CodePushTelemetryManager.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushUpdateUtils.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushUtils.h">
       <Filter>CodePush</Filter>
     </ClInclude>
   </ItemGroup>
@@ -89,10 +89,10 @@
       <UniqueIdentifier>{e48dc53e-40b1-40cb-970a-f89935452892}</UniqueIdentifier>
     </Filter>
     <Filter Include="CodePush">
-      <UniqueIdentifier>{a6cfefef-527f-4450-82e5-1fc53152a8d4}</UniqueIdentifier>
+      <UniqueIdentifier>{c0fd9b85-913c-4dba-9071-965f5f2bf3de}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Miniz">
-      <UniqueIdentifier>{f107ad2d-e4d3-465b-bec9-fb13c2ee7b53}</UniqueIdentifier>
+    <Filter Include="miniz">
+      <UniqueIdentifier>{a9e8070a-aabb-466c-b899-7b722f59bd26}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -101,5 +101,8 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="readme.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="MainPage.xaml" />
   </ItemGroup>
 </Project>

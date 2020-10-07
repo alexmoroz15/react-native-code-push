@@ -7,21 +7,17 @@
 
 #include "winrt/Windows.Storage.h"
 #include "winrt/Windows.Foundation.h"
-#include "winrt/Windows.Data.Json.h"
 
-#include "CodePush.h"
 
 using namespace winrt::CodePushDemoAppCpp;
 using namespace winrt::CodePushDemoAppCpp::implementation;
-
 using namespace winrt;
-using namespace winrt::Windows::Storage;
-using namespace winrt::Windows::Foundation;
-using namespace winrt::Windows::Data::Json;
+using namespace Windows::UI::Xaml;
+using namespace Windows::UI::Xaml::Controls;
+using namespace Windows::UI::Xaml::Navigation;
+using namespace Windows::ApplicationModel;
 
-//winrt::Microsoft::ReactNative::ReactInstanceSettings g_instanceSettings{ nullptr };
-//winrt::Microsoft::ReactNative::IReactContext g_reactContext{ nullptr };
-winrt::Microsoft::ReactNative::ReactNativeHost g_host{ nullptr };
+using namespace Windows::Storage;
 
 /// <summary>
 /// Initializes the singleton application object.  This is the first line of
@@ -30,38 +26,69 @@ winrt::Microsoft::ReactNative::ReactNativeHost g_host{ nullptr };
 /// </summary>
 App::App() noexcept
 {
-    MainComponentName(L"CodePushDemoAppCpp");
+#if BUNDLE
 
-//#if BUNDLE
     //InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
-    
+
     auto localSettings{ ApplicationData::Current().LocalSettings() };
     localSettings.Values().Remove(L"currentPackageFolderPath");
-    
+
 
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
     InstanceSettings().UseFastRefresh(false);
-/*#else
+#else
     JavaScriptMainModuleName(L"index");
     InstanceSettings().UseWebDebugger(true);
     InstanceSettings().UseFastRefresh(true);
-#endif*/
+#endif
 
-/*#if _DEBUG
-    InstanceSettings().EnableDeveloperMenu(true);
-#else*/
-    InstanceSettings().EnableDeveloperMenu(false);
-//#endif
-
-    //instanceSettings = InstanceSettings();
-    //InstanceSettings().Properties().Set(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
-    g_host = Host();
-    //g_instanceSettings = InstanceSettings();
+#if _DEBUG
+    InstanceSettings().UseDeveloperSupport(true);
+#else
+    InstanceSettings().UseDeveloperSupport(false);
+#endif
 
     RegisterAutolinkedNativeModulePackages(PackageProviders()); // Includes any autolinked modules
 
     PackageProviders().Append(make<ReactPackageProvider>()); // Includes all modules in this project
 
+    InstanceSettings().Properties().Set(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
+
     InitializeComponent();
+}
+
+/// <summary>
+/// Invoked when the application is launched normally by the end user.  Other entry points
+/// will be used such as when the application is launched to open a specific file.
+/// </summary>
+/// <param name="e">Details about the launch request and process.</param>
+void App::OnLaunched(activation::LaunchActivatedEventArgs const& e)
+{
+    super::OnLaunched(e);
+
+    Frame rootFrame = Window::Current().Content().as<Frame>();
+    rootFrame.Navigate(xaml_typename<CodePushDemoAppCpp::MainPage>(), box_value(e.Arguments()));
+}
+
+/// <summary>
+/// Invoked when application execution is being suspended.  Application state is saved
+/// without knowing whether the application will be terminated or resumed with the contents
+/// of memory still intact.
+/// </summary>
+/// <param name="sender">The source of the suspend request.</param>
+/// <param name="e">Details about the suspend request.</param>
+void App::OnSuspending([[maybe_unused]] IInspectable const& sender, [[maybe_unused]] SuspendingEventArgs const& e)
+{
+    // Save application state and stop any background activity
+}
+
+/// <summary>
+/// Invoked when Navigation to a certain page fails
+/// </summary>
+/// <param name="sender">The Frame which failed navigation</param>
+/// <param name="e">Details about the navigation failure</param>
+void App::OnNavigationFailed(IInspectable const&, NavigationFailedEventArgs const& e)
+{
+    throw hresult_error(E_FAIL, hstring(L"Failed to load Page ") + e.SourcePageType().Name);
 }
