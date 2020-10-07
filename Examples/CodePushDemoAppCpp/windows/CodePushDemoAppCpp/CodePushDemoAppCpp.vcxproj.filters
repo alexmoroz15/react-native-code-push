@@ -27,6 +27,9 @@
     <ClCompile Include="CodePushUtils.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
+    <ClCompile Include="CodePushUpdateUtils.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />

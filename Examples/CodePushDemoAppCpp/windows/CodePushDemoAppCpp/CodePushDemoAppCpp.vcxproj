@@ -147,6 +147,7 @@
     <ClCompile Include="CodePush.cpp" />
     <ClCompile Include="CodePushConfig.cpp" />
     <ClCompile Include="CodePushPackage.cpp" />
+    <ClCompile Include="CodePushUpdateUtils.cpp" />
     <ClCompile Include="CodePushUtils.cpp" />
     <ClCompile Include="MainPage.cpp">
       <DependentUpon>MainPage.xaml</DependentUpon>
