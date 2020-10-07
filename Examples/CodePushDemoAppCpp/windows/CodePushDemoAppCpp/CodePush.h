@@ -99,6 +99,7 @@ namespace CodePush
 		const wstring LatestRollbackCountKey{ L"count" };
 
 		void LoadBundle();
+		void RemovePendingUpdate();
 		void RestartAppInternal(bool onlyIfUpdateIsPending);
 
 	public:
@@ -161,7 +162,7 @@ namespace CodePush
          * app version, as well as the deployment key that was configured in the Info.plist file.
          */
 		REACT_METHOD(GetConfiguration, L"getConfiguration");
-		void GetConfiguration(ReactPromise<JsonObject> promise) noexcept;
+		void GetConfiguration(ReactPromise<IJsonValue> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.getUpdateMetadata method.
@@ -199,7 +200,7 @@ namespace CodePush
          * This method is the native side of the CodePush.notifyApplicationReady() method.
          */
 		REACT_METHOD(NotifyApplicationReady, L"notifyApplicationReady");
-		void NotifyApplicationReady() noexcept;
+		void NotifyApplicationReady(ReactPromise<IJsonValue> promise) noexcept;
 
 		REACT_METHOD(Allow, L"allow");
 		void Allow(ReactPromise<JSValue> promise) noexcept;

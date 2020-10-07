@@ -61,6 +61,24 @@ void CodePush::CodePush::LoadBundle()
         });
 }
 
+/*
+ * This method is used to register the fact that a pending
+ * update succeeded and therefore can be removed.
+ */
+void CodePush::CodePush::RemovePendingUpdate()
+{
+    // remove pending update from LocalSettings
+}
+
+/*
++ (void)removePendingUpdate
+{
+    NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
+    [preferences removeObjectForKey:PendingUpdateKey];
+    [preferences synchronize];
+}
+*/
+
 void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
 {
     if (m_restartInProgress)
@@ -110,6 +128,121 @@ void CodePush::CodePush::GetConstants(winrt::Microsoft::ReactNative::ReactConsta
     constants.Add(L"codePushUpdateStateRunning", CodePushUpdateState::RUNNING);
     constants.Add(L"codePushUpdateStatePending", CodePushUpdateState::PENDING);
     constants.Add(L"codePushUpdateStateLatest", CodePushUpdateState::LATEST);
+}
+
+IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder rootFolder, path& relPath)
+{
+    std::stack<std::string> pathParts;
+    pathParts.push(relPath.filename().string());
+    while (relPath.has_parent_path())
+    {
+        relPath = relPath.parent_path();
+        pathParts.push(relPath.filename().string());
+    }
+
+    while (pathParts.size() > 1)
+    {
+        auto itemName{ pathParts.top() };
+        auto item{ co_await rootFolder.TryGetItemAsync(to_hstring(itemName)) };
+        if (item == nullptr)
+        {
+            rootFolder = co_await rootFolder.CreateFolderAsync(to_hstring(itemName));
+        }
+        else
+        {
+            rootFolder = item.try_as<StorageFolder>();
+        }
+        pathParts.pop();
+    }
+    auto fileName{ pathParts.top() };
+    auto file{ co_await rootFolder.CreateFileAsync(to_hstring(fileName), CreationCollisionOption::ReplaceExisting) };
+    co_return file;
+}
+
+IAsyncOperation<hstring> FindFilePathAsync(const StorageFolder& rootFolder, std::wstring_view fileName)
+{
+    std::stack<StorageFolder> candidateFolders;
+    candidateFolders.push(rootFolder);
+
+    while (!candidateFolders.empty())
+    {
+        auto relRootFolder = candidateFolders.top();
+        candidateFolders.pop();
+
+        auto files{ co_await relRootFolder.GetFilesAsync() };
+        for (const auto& file : files)
+        {
+            if (file.Name() == fileName)
+            {
+                std::wstring filePath{ file.Path() };
+                hstring filePathSub{ filePath.substr(rootFolder.Path().size() + 1) };
+                co_return filePathSub;
+            }
+        }
+
+        auto folders{ co_await rootFolder.GetFoldersAsync() };
+        for (const auto& folder : folders)
+        {
+            candidateFolders.push(folder);
+        }
+    }
+
+    co_return L"";
+}
+
+IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
+{
+    std::string zipName{ to_string(zipFile.Path()) };
+
+    mz_bool status;
+    mz_zip_archive zip_archive;
+    mz_zip_zero_struct(&zip_archive);
+
+    status = mz_zip_reader_init_file(&zip_archive, zipName.c_str(), 0);
+    assert(status);
+    auto numFiles{ mz_zip_reader_get_num_files(&zip_archive) };
+
+    for (mz_uint i = 0; i < numFiles; i++)
+    {
+        mz_zip_archive_file_stat file_stat;
+        status = mz_zip_reader_file_stat(&zip_archive, i, &file_stat);
+        assert(status);
+        if (!mz_zip_reader_is_file_a_directory(&zip_archive, i))
+        {
+            auto fileName{ file_stat.m_filename };
+            auto filePath{ path(fileName) };
+            auto filePathName{ filePath.filename() };
+            auto filePathNameString{ filePathName.string() };
+
+            auto entryFile{ co_await CreateFileFromPathAsync(destination, filePath) };
+            auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
+            auto os{ stream.GetOutputStreamAt(0) };
+            DataWriter dw{ os };
+
+            const auto arrBufSize = 8 * 1024;
+            std::array<uint8_t, arrBufSize> arrBuf;
+
+            mz_zip_reader_extract_iter_state* pState = mz_zip_reader_extract_iter_new(&zip_archive, i, 0);
+            //size_t bytesRead{ 0 };
+            while (size_t bytesRead{ mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()) })
+            {
+                array_view<const uint8_t> view{ arrBuf.data(), arrBuf.data() + bytesRead };
+                dw.WriteBytes(view);
+            }
+            status = mz_zip_reader_extract_iter_free(pState);
+            assert(status);
+
+            co_await dw.StoreAsync();
+            co_await dw.FlushAsync();
+
+            dw.Close();
+            os.Close();
+            stream.Close();
+        }
+    }
+
+    status = mz_zip_reader_end(&zip_archive);
+    assert(status);
 }
 
 /*
@@ -283,7 +416,47 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSDictionary*)updatePackage
  * internally only by the CodePush.checkForUpdate method in order to get the
  * app version, as well as the deployment key that was configured in the Info.plist file.
  */
-void CodePush::CodePush::GetConfiguration(ReactPromise<JsonObject> promise) noexcept {}
+void CodePush::CodePush::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
+{
+    JsonObject configMap;
+    configMap.Insert(L"appVersion", JsonValue::CreateStringValue(L"1.0.0"));
+    configMap.Insert(L"deploymentKey", JsonValue::CreateStringValue(L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS"));
+    configMap.Insert(L"serverUrl", JsonValue::CreateStringValue(L"https://codepush.appcenter.ms/"));
+    promise.Resolve(configMap);
+}
+
+/*
+RCT_EXPORT_METHOD(getConfiguration:(RCTPromiseResolveBlock)resolve
+                          rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *configuration = [[CodePushConfig current] configuration];
+    NSError *error;
+    if (isRunningBinaryVersion) {
+        // isRunningBinaryVersion will not get set to "YES" if running against the packager.
+        NSString *binaryHash = [CodePushUpdateUtils getHashForBinaryContents:[CodePush binaryBundleURL] error:&error];
+        if (error) {
+            CPLog(@"Error obtaining hash for binary contents: %@", error);
+            resolve(configuration);
+            return;
+        }
+
+        if (binaryHash == nil) {
+            // The hash was not generated either due to a previous unknown error or the fact that
+            // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
+            // builds.
+            resolve(configuration);
+            return;
+        }
+
+        NSMutableDictionary *mutableConfiguration = [configuration mutableCopy];
+        [mutableConfiguration setObject:binaryHash forKey:PackageHashKey];
+        resolve(mutableConfiguration);
+        return;
+    }
+
+    resolve(configuration);
+}
+*/
 
 /*
  * This method is the native side of the CodePush.getUpdateMetadata method.
@@ -314,7 +487,20 @@ void CodePush::CodePush::IsFirstRun(wstring packageHash, ReactPromise<bool> prom
 /*
  * This method is the native side of the CodePush.notifyApplicationReady() method.
  */
-void CodePush::CodePush::NotifyApplicationReady() noexcept {}
+void CodePush::CodePush::NotifyApplicationReady(ReactPromise<IJsonValue> promise) noexcept
+{
+    RemovePendingUpdate();
+    promise.Resolve(JsonValue::CreateNullValue());
+}
+
+/*
+RCT_EXPORT_METHOD(notifyApplicationReady:(RCTPromiseResolveBlock)resolve
+                                rejecter:(RCTPromiseRejectBlock)reject)
+{
+    [CodePush removePendingUpdate];
+    resolve(nil);
+}
+*/
 
 void CodePush::CodePush::Allow(ReactPromise<JSValue> promise) noexcept 
 {
