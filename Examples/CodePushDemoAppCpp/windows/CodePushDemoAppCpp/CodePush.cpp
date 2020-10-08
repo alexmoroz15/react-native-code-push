@@ -42,7 +42,7 @@ path CodePush::CodePush::GetBundlePath() { return nullptr; }
 void CodePush::CodePush::OverrideAppVersion(wstring appVersion) {}
 void CodePush::CodePush::SetDeploymentKey(wstring deploymentKey) {}
 
-bool CodePush::CodePush::IsFailedHash(wstring packageHash) { return false; }
+bool CodePush::CodePush::IsFailedHash(wstring_view packageHash) { return false; }
 
 JsonObject CodePush::CodePush::GetRollbackInfo() { return nullptr; }
 //void SetLatestRollbackInfo(wstring packageHash);
@@ -53,6 +53,18 @@ bool CodePush::CodePush::IsPendingUpdate(wstring packageHash) { return false; }
 bool CodePush::CodePush::IsUsingTestConfiguration() { return false; }
 void CodePush::CodePush::SetUsingTestConfiguration() {}
 //void ClearUpdates();
+
+void CodePush::CodePush::DispatchDownloadProgressEvent() 
+{
+    // Notify the script-side about the progress
+    m_context.CallJSFunction(
+        L"RCTDeviceEventEmitter",
+        L"emit",
+        L"CodePushDownloadProgress",
+        JSValueObject{
+            {"totalBytes", m_latestExpectedContentLength },
+            {"receivedBytes", m_latestReceivedContentLength } });
+}
 
 void CodePush::CodePush::LoadBundle()
 {
@@ -110,12 +122,37 @@ void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
     }
 }
 
+/*
+ * When an update failed to apply, this method can be called
+ * to store its hash so that it can be ignored on future
+ * attempts to check the server for an update.
+ */
+void CodePush::CodePush::SaveFailedUpdate(JsonObject& failedPackage)
+{
+    if (IsFailedHash(failedPackage.GetNamedString(PackageHashKey)))
+    {
+        return;
+    }
+
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    auto failedUpdates{ localSettings.Values().TryLookup(FailedUpdatesKey).try_as<JsonArray>() };
+    if (failedUpdates == nullptr)
+    {
+        failedUpdates = JsonArray{};
+    }
+
+    failedUpdates.Append(failedPackage);
+    localSettings.Values().Insert(FailedUpdatesKey, failedUpdates);
+}
+
 void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
 
     auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
     m_host = res.as<ReactNativeHost>();
+
+    m_codePushConfig = CodePushConfig::Init(m_context);
 }
 
 void CodePush::CodePush::GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
@@ -248,92 +285,8 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
 /*
  * This is native-side of the RemotePackage.download method
  */
-fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept 
+fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept
 {
-
-    auto mutableUpdatePackage{ updatePackage };
-
-    auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
-
-    wstring_view newUpdateHash{ updatePackage.GetNamedString(L"packageHash") };
-    StorageFolder newUpdateFolder{ nullptr };
-
-    auto downloadUrl{ updatePackage.GetNamedString(L"downloadUrl") };
-    const uint32_t BufferSize{ 8 * 1024 };
-
-    HttpClient client;
-    auto headers{ client.DefaultRequestHeaders() };
-    headers.Append(L"Accept-Encoding", L"identity");
-
-    auto downloadFile{ co_await storageFolder.CreateFileAsync(L"download.zip", Windows::Storage::CreationCollisionOption::ReplaceExisting) };
-
-    HttpRequestMessage reqm{ HttpMethod::Get(), Uri(downloadUrl) };
-    auto resm{ co_await client.SendRequestAsync(reqm, HttpCompletionOption::ResponseHeadersRead) };
-    auto totalBytes{ resm.Content().Headers().ContentLength().GetInt64() };
-    auto inputStream{ co_await resm.Content().ReadAsInputStreamAsync() };
-    auto outputStream{ co_await downloadFile.OpenAsync(Windows::Storage::FileAccessMode::ReadWrite) };
-
-    bool isZip{ true };
-
-    UINT64 receivedBytes{ 0 };
-    for (;;)
-    {
-        auto outputBuffer{ co_await inputStream.ReadAsync(Buffer{ BufferSize }, BufferSize, InputStreamOptions::None) };
-
-        if (outputBuffer.Length() == 0)
-        {
-            break;
-        }
-        co_await outputStream.WriteAsync(outputBuffer);
-
-        receivedBytes += outputBuffer.Length();
-
-        if (notifyProgress)
-        {
-            m_context.CallJSFunction(
-                L"RCTDeviceEventEmitter",
-                L"emit",
-                L"CodePushDownloadProgress",
-                JSValueObject{
-                    {"totalBytes", totalBytes },
-                    {"receivedBytes", receivedBytes } });
-        }
-    }
-
-    inputStream.Close();
-    outputStream.Close();
-
-    if (isZip)
-    {
-        auto unzippedFolderName{ L"unzipped" };
-        auto unzippedFolder = co_await storageFolder.CreateFolderAsync(unzippedFolderName, CreationCollisionOption::ReplaceExisting);
-        co_await UnzipAsync(downloadFile, unzippedFolder);
-        downloadFile.DeleteAsync();
-
-        auto relativeBundlePath1{ co_await FindFilePathAsync(unzippedFolder, L"index.windows.bundle") };
-        auto relativeBundlePath{ path(newUpdateHash) / std::wstring_view(relativeBundlePath1) };
-
-        co_await unzippedFolder.RenameAsync(newUpdateHash, NameCollisionOption::ReplaceExisting);
-        newUpdateFolder = unzippedFolder;
-
-        //mutableUpdatePackage["bundlePath"] = to_string(relativeBundlePath.wstring());
-        mutableUpdatePackage.Insert(L"bundlePath", JsonValue::CreateStringValue(relativeBundlePath.wstring()));
-        promise.Resolve(mutableUpdatePackage);
-    }
-    else
-    {
-        // Rename the file
-        co_await downloadFile.RenameAsync(L"index.windows.bundle", Windows::Storage::NameCollisionOption::ReplaceExisting);
-    }
-
-    auto newUpdateMetadataPath{ path(newUpdateHash) / "CodePush" / "assets" / "app.json" };
-    auto newUpdateMetadataFile{ co_await CreateFileFromPathAsync(storageFolder, newUpdateMetadataPath) };
-
-    co_await FileIO::WriteTextAsync(newUpdateMetadataFile, mutableUpdatePackage.Stringify());
-
-    co_return;
-    
-    /*
     auto mutableUpdatePackage{ updatePackage };
     path binaryBundlePath{ GetBinaryBundlePath() };
     if (!binaryBundlePath.empty())
@@ -341,8 +294,50 @@ fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage
         mutableUpdatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(CodePushUpdateUtils::ModifiedDateStringOfFileAtPath(binaryBundlePath)));
     }
 
+    bool paused{ false };
+    if (notifyProgress)
+    {
+        m_didUpdateProgress = false;
+        paused = false;
+    }
+
+    //auto publicKey{ CodePushConfig::Current().GetPublicKey() };
+    auto publicKey{ m_codePushConfig.GetPublicKey() };
+
+    co_await CodePushPackage::DownloadPackageAsync(
+        mutableUpdatePackage, 
+        (co_await GetBundleFileAsync()).Path(), 
+        publicKey,
+        /* progressCallback */ [=](int64_t expectedContentLength, int64_t receivedContentLength) {
+            // Update the download progress so that the frame observer can notify the JS side
+            m_latestExpectedContentLength = expectedContentLength;
+            m_latestReceivedContentLength = receivedContentLength;
+            m_didUpdateProgress = true;
+
+            // If the download is completed, stop observing frame
+            // updates and synchronously send the last event.
+            if (expectedContentLength == receivedContentLength) {
+                m_didUpdateProgress = false;
+                //paused = true;
+                DispatchDownloadProgressEvent();
+            }
+        },
+        /* doneCallback */ [=] {
+            auto newPackage{ CodePushPackage::GetPackageAsync(mutableUpdatePackage.GetNamedString(PackageHashKey)).GetResults() };
+            promise.Resolve(newPackage);
+        },
+        /* failCallback */ [=](const hresult_error& ex) {
+            // If the error is a codepush error...
+            auto updatePackage = mutableUpdatePackage;
+            SaveFailedUpdate(updatePackage);
+            
+            // Stop observing frame updates if the download fails.
+            m_didUpdateProgress = false;
+            //paused = true;
+            promise.Reject(ex.message().c_str());
+        });
+
     co_return;
-    */
 }
 
 /*
@@ -421,15 +416,19 @@ void CodePush::CodePush::GetConfiguration(ReactPromise<IJsonValue> promise) noex
 {
     JsonObject configMap;
     
-    configMap.Insert(L"appVersion", JsonValue::CreateStringValue(L"1.0.0"));
-    configMap.Insert(L"deploymentKey", JsonValue::CreateStringValue(L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS"));
-    configMap.Insert(L"serverUrl", JsonValue::CreateStringValue(L"https://codepush.appcenter.ms/"));
-    
-    /*
-    auto res = m_context.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"appVersion"));
-    configMap.Insert(L"appVersion", JsonValue::CreateStringValue(unbox_value<wstring>(res)));
-    */
-    promise.Resolve(configMap);
+    auto res = m_context.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"Configuration")).try_as<IMap<hstring, hstring>>();
+    if (res != nullptr)
+    {
+        for (const auto& pair : res)
+        {
+            configMap.Insert(pair.Key(), JsonValue::CreateStringValue(pair.Value()));
+        }
+        promise.Resolve(configMap);
+    }
+    else
+    {
+        promise.Resolve(JsonValue::CreateNullValue());
+    }
 }
 
 /*

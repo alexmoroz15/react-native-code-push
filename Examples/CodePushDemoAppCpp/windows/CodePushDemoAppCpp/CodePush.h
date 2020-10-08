@@ -6,6 +6,8 @@
 
 #include <filesystem>
 
+#include "CodePushConfig.h"
+
 // Helper functions for reading and sending JsonValues to and from JavaScript
 namespace winrt::Microsoft::ReactNative
 {
@@ -42,7 +44,7 @@ namespace CodePush
 
 		// Used to coordinate the dispatching of download progress events to JS.
 		uint64_t m_latestExpectedContentLength;
-		uint64_t m_latestReceivedConentLength;
+		uint64_t m_latestReceivedContentLength;
 		bool m_didUpdateProgress;
 
 		bool m_allowed{ true };
@@ -91,6 +93,7 @@ namespace CodePush
 		*/
 		ReactNativeHost m_host;
 		ReactContext m_context;
+		CodePushConfig m_codePushConfig;
 
 		// These keys represent the names we use to store information about the latest rollback
 		const wstring LatestRollbackInfoKey{ L"LATEST_ROLLBACK_INFO" };
@@ -98,9 +101,11 @@ namespace CodePush
 		const wstring LatestRollbackTimeKey{ L"time" };
 		const wstring LatestRollbackCountKey{ L"count" };
 
+		void DispatchDownloadProgressEvent();
 		void LoadBundle();
 		void RemovePendingUpdate();
 		void RestartAppInternal(bool onlyIfUpdateIsPending);
+		void SaveFailedUpdate(JsonObject& failedPackage);
 
 	public:
 		enum class CodePushInstallMode
@@ -131,7 +136,7 @@ namespace CodePush
 		void OverrideAppVersion(wstring appVersion);
 		void SetDeploymentKey(wstring deploymentKey);
 
-		bool IsFailedHash(wstring packageHash);
+		bool IsFailedHash(wstring_view packageHash);
 
 		JsonObject GetRollbackInfo();
 		//void SetLatestRollbackInfo(wstring packageHash);
