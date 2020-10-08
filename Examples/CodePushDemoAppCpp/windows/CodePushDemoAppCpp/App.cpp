@@ -7,6 +7,7 @@
 
 #include "winrt/Windows.Storage.h"
 #include "winrt/Windows.Foundation.h"
+#include "winrt/Windows.Data.Json.h"
 
 
 using namespace winrt::CodePushDemoAppCpp;
@@ -18,6 +19,9 @@ using namespace Windows::UI::Xaml::Navigation;
 using namespace Windows::ApplicationModel;
 
 using namespace Windows::Storage;
+using namespace Windows::Data::Json;
+
+using namespace Microsoft::ReactNative;
 
 /// <summary>
 /// Initializes the singleton application object.  This is the first line of
@@ -53,8 +57,17 @@ App::App() noexcept
 
     PackageProviders().Append(make<ReactPackageProvider>()); // Includes all modules in this project
 
-    InstanceSettings().Properties().Set(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
+    InstanceSettings().Properties().Set(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
 
+    JsonObject configMap; 
+    configMap.Insert(L"appVersion", JsonValue::CreateStringValue(L"1.0.0"));
+    configMap.Insert(L"deploymentKey", JsonValue::CreateStringValue(L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS"));
+    configMap.Insert(L"serverUrl", JsonValue::CreateStringValue(L"https://codepush.appcenter.ms/"));
+    for (const auto& elem : configMap)
+    {
+        InstanceSettings().Properties().Set(ReactPropertyBagHelper::GetName(nullptr, elem.Key()), box_value(elem.Value().GetString()));
+    }
+    
     InitializeComponent();
 }
 
