@@ -2,38 +2,47 @@
 
 #include <string>
 #include <filesystem>
+#include "winrt/Microsoft.ReactNative.h"
+#include "winrt/Windows.Data.Json.h"
 
 namespace CodePush
 {
+	using namespace winrt;
+	using namespace Microsoft::ReactNative;
+	using namespace Windows::Data::Json;
+
 	using namespace std;
 
 	struct CodePushConfig
 	{
 	private:
-		wstring appVersion;
-		wstring buildVersion;
-		wstring configuration;
-		wstring deploymentKey;
-		wstring serverUrl;
-		wstring publicKey;
+		static const wstring AppVersionConfigKey{ L"appVersion" };
+		static const wstring BuildVersionConfigKey{ L"buildVersion" };
+		static const wstring ClientUniqueIDConfigKey{ L"clientUniqueId" };
+		static const wstring DeploymentKeyConfigKey{ L"deploymentKey" };
+		static const wstring ServerURLConfigKey{ L"serverUrl" };
+		static const wstring PublicKeyKey{ L"publicKey" };
+
+		IMap<hstring, hstring> configuration;
 
 	public:
-		wstring GetAppVersion() { return appVersion; }
-		void SetAppVersion(wstring _appVersion) { appVersion = _appVersion; }
+		hstring GetAppVersion() { return configuration.Lookup(AppVersionConfigKey); }
+		void SetAppVersion(wstring_view appVersion) { configuration.Insert(AppVersionConfigKey, appVersion); }
 
-		wstring GetBuildVersion() { return buildVersion; }
+		hstring GetBuildVersion() { return configuration.Lookup(BuildVersionConfigKey); }
 		
-		wstring GetConfiguration() { return configuration; }
+		JsonObject GetConfiguration();
 
-		wstring GetDeploymentKey() { return deploymentKey; }
-		void SetDeploymentKey(wstring _appVersion) { appVersion = _appVersion; }
+		hstring GetDeploymentKey() { return configuration.Lookup(DeploymentKeyConfigKey); }
+		void SetDeploymentKey(wstring_view deploymentKey) { configuration.Insert(DeploymentKeyConfigKey, deploymentKey); }
 
-		wstring GetServerUrl() { return serverUrl; }
-		void SetServerUrl(wstring _serverUrl) { serverUrl = _serverUrl; }
+		hstring GetServerUrl() { return configuration.Lookup(ServerURLConfigKey); }
+		void SetServerUrl(wstring_view serverUrl) { configuration.Insert(ServerURLConfigKey, serverUrl); }
 
-		wstring GetPublicKey() { return publicKey; }
-		void SetPublicKey(wstring _publicKey) { publicKey = _publicKey; }
+		hstring GetPublicKey() { return configuration.Lookup(PublicKeyKey); }
+		void SetPublicKey(wstring_view publicKey) { configuration.Insert(PublicKeyKey, publicKey); }
 
-		static CodePushConfig Current();
+		static CodePushConfig Init(IReactContext const& context);
+
 	};
 }
