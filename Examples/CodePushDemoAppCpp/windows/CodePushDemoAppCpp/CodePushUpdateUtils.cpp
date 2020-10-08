@@ -1,5 +1,7 @@
-#include "CodePushUpdateUtils.h"
 #include "pch.h"
+
+#include "CodePush.h"
+#include "CodePushUpdateUtils.h"
 
 using namespace CodePush;
 
