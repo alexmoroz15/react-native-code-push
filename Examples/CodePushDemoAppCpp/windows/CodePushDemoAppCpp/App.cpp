@@ -9,6 +9,8 @@
 #include "winrt/Windows.Foundation.h"
 #include "winrt/Windows.Data.Json.h"
 
+#include <string_view>
+
 
 using namespace winrt::CodePushDemoAppCpp;
 using namespace winrt::CodePushDemoAppCpp::implementation;
@@ -22,6 +24,8 @@ using namespace Windows::Storage;
 using namespace Windows::Data::Json;
 
 using namespace Microsoft::ReactNative;
+
+using namespace std;
 
 /// <summary>
 /// Initializes the singleton application object.  This is the first line of
@@ -59,14 +63,11 @@ App::App() noexcept
 
     InstanceSettings().Properties().Set(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
 
-    JsonObject configMap; 
-    configMap.Insert(L"appVersion", JsonValue::CreateStringValue(L"1.0.0"));
-    configMap.Insert(L"deploymentKey", JsonValue::CreateStringValue(L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS"));
-    configMap.Insert(L"serverUrl", JsonValue::CreateStringValue(L"https://codepush.appcenter.ms/"));
-    for (const auto& elem : configMap)
-    {
-        InstanceSettings().Properties().Set(ReactPropertyBagHelper::GetName(nullptr, elem.Key()), box_value(elem.Value().GetString()));
-    }
+    auto configMap{ winrt::single_threaded_map<hstring, hstring>() };
+    configMap.Insert(L"appVersion", L"1.0.0");
+    configMap.Insert(L"deploymentKey", L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS");
+    configMap.Insert(L"serverUrl", L"https://codepush.appcenter.ms/");
+    InstanceSettings().Properties().Set(ReactPropertyBagHelper::GetName(nullptr, L"Configuration"), configMap);
     
     InitializeComponent();
 }
