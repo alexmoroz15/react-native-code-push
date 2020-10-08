@@ -250,6 +250,7 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
  */
 fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept 
 {
+
     auto mutableUpdatePackage{ updatePackage };
 
     auto storageFolder{ Windows::Storage::ApplicationData::Current().LocalFolder() };
@@ -331,7 +332,7 @@ fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage
     co_await FileIO::WriteTextAsync(newUpdateMetadataFile, mutableUpdatePackage.Stringify());
 
     co_return;
-
+    
     /*
     auto mutableUpdatePackage{ updatePackage };
     path binaryBundlePath{ GetBinaryBundlePath() };
@@ -419,9 +420,15 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSDictionary*)updatePackage
 void CodePush::CodePush::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
 {
     JsonObject configMap;
+    
     configMap.Insert(L"appVersion", JsonValue::CreateStringValue(L"1.0.0"));
     configMap.Insert(L"deploymentKey", JsonValue::CreateStringValue(L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS"));
     configMap.Insert(L"serverUrl", JsonValue::CreateStringValue(L"https://codepush.appcenter.ms/"));
+    
+    /*
+    auto res = m_context.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"appVersion"));
+    configMap.Insert(L"appVersion", JsonValue::CreateStringValue(unbox_value<wstring>(res)));
+    */
     promise.Resolve(configMap);
 }
 
@@ -558,7 +565,7 @@ void CodePush::CodePush::DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl
  * This method is checks if a new status update exists (new version was installed,
  * or an update failed) and return its details (version label, status).
  */
-fire_and_forget CodePush::CodePush::GetNewStatusReportAsync(ReactPromise<JsonObject> promise) noexcept 
+fire_and_forget CodePush::CodePush::GetNewStatusReportAsync(ReactPromise<IJsonValue> promise) noexcept 
 {
     /*
     if (needToReportRollback)
@@ -589,7 +596,7 @@ fire_and_forget CodePush::CodePush::GetNewStatusReportAsync(ReactPromise<JsonObj
     }
     */
 
-    promise.Resolve(JsonObject{});
+    promise.Resolve(JsonValue::CreateNullValue());
     co_return;
 }
 
@@ -690,40 +697,45 @@ namespace winrt::Microsoft::ReactNative
 
     void ReadValue(IJSValueReader const& reader, /*out*/ IJsonValue& value) noexcept
     {
-        JsonObject valueObject;
-        JsonArray valueArray;
-        hstring propertyName;
-        switch (reader.ValueType())
+        if (reader.ValueType() == JSValueType::Object)
         {
-        case JSValueType::Object:
+            JsonObject valueObject;
+            hstring propertyName;
             while (reader.GetNextObjectProperty(propertyName))
             {
                 valueObject.Insert(propertyName, ReadValue<IJsonValue>(reader));
             }
             value = valueObject;
-            break;
-        case JSValueType::Array:
+        }
+        else if (reader.ValueType() == JSValueType::Array)
+        {
+            JsonArray valueArray;
             while (reader.GetNextArrayItem())
             {
                 valueArray.Append(ReadValue<IJsonValue>(reader));
             }
             value = valueArray;
-            break;
-        case JSValueType::Boolean:
-            value = JsonValue::CreateBooleanValue(reader.GetBoolean());
-            break;
-        case JSValueType::Double:
-            value = JsonValue::CreateNumberValue(reader.GetDouble());
-            break;
-        case JSValueType::Int64:
-            value = JsonValue::CreateNumberValue(static_cast<double>(reader.GetInt64()));
-            break;
-        case JSValueType::String:
-            value = JsonValue::CreateStringValue(reader.GetString());
-            break;
-        case JSValueType::Null:
-            value = JsonValue::CreateNullValue();
-            break;
+        }
+        else
+        {
+            switch (reader.ValueType())
+            {
+            case JSValueType::Boolean:
+                value = JsonValue::CreateBooleanValue(reader.GetBoolean());
+                break;
+            case JSValueType::Double:
+                value = JsonValue::CreateNumberValue(reader.GetDouble());
+                break;
+            case JSValueType::Int64:
+                value = JsonValue::CreateNumberValue(static_cast<double>(reader.GetInt64()));
+                break;
+            case JSValueType::String:
+                value = JsonValue::CreateStringValue(reader.GetString());
+                break;
+            case JSValueType::Null:
+                value = JsonValue::CreateNullValue();
+                break;
+            }
         }
     }
 }

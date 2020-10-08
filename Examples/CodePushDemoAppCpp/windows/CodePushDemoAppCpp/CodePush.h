@@ -242,7 +242,7 @@ namespace CodePush
          * or an update failed) and return its details (version label, status).
          */
 		REACT_METHOD(GetNewStatusReportAsync, L"getNewStatusReport");
-		fire_and_forget GetNewStatusReportAsync(ReactPromise<JsonObject> promise) noexcept;
+		fire_and_forget GetNewStatusReportAsync(ReactPromise<IJsonValue> promise) noexcept;
 
 		REACT_METHOD(RecordStatusReported, L"recordStatusReported");
 		void RecordStatusReported(JsonObject statusReport) noexcept;
