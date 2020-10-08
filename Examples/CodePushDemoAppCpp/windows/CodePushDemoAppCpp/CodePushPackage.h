@@ -2,6 +2,7 @@
 
 #include <winrt/Windows.Data.Json.h>
 #include <filesystem>
+#include <functional>
 
 /*
 @interface CodePushPackage : NSObject
@@ -62,14 +63,13 @@ namespace CodePush
 
 	public:
 
-		IAsyncAction DownloadPackageAsync(
+		static IAsyncAction DownloadPackageAsync(
 			JsonObject updatePackage,
-			wstring expectedBundleFileName,
-			wstring publicKey,
-			int operationQueue,
-			int progressCallback,
-			int doneCallback,
-			int failCallback);
+			wstring_view expectedBundleFileName,
+			wstring_view publicKey,
+			function<void(int64_t, int64_t)> progressCallback,
+			function<void()> doneCallback,
+			function<void(const hresult_error&)> failCallback);
 
 		static IAsyncOperation<JsonObject> GetCurrentPackageAsync();
 		static IAsyncOperation<JsonObject> GetPreviousPackageAsync();
@@ -77,16 +77,16 @@ namespace CodePush
 		static IAsyncOperation<path> GetCurrentPackageBundlePathAsync();
 		static IAsyncOperation<wstring> GetCurrentPackageHashAsync();
 
-		IAsyncOperation<JsonObject> GetPackageAsync(wstring packageHash);
+		static IAsyncOperation<JsonObject> GetPackageAsync(wstring_view packageHash);
 
-		path GetPackageFolderPath(wstring packageHash);
+		static path GetPackageFolderPath(wstring_view packageHash);
 
-		IAsyncOperation<bool> InstallPackageAsync(JsonObject updatePackage, bool removePendingUpdate);
+		static IAsyncOperation<bool> InstallPackageAsync(JsonObject updatePackage, bool removePendingUpdate);
 
-		void RollbackPackage();
+		static void RollbackPackage();
 
 		// The below methods are only used during tests.
-		void ClearUpdates();
-		IAsyncAction DownloadAndReplaceCurrentBundleAsync(wstring remoteBundleUrl);
+		static void ClearUpdates();
+		static IAsyncAction DownloadAndReplaceCurrentBundleAsync(wstring remoteBundleUrl);
 	};
 }
