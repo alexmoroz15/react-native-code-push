@@ -1,27 +1,31 @@
 #pragma once
 
+#include "NativeModules.h"
+
 #include <string>
 #include <filesystem>
 #include "winrt/Microsoft.ReactNative.h"
 #include "winrt/Windows.Data.Json.h"
+#include "winrt/Windows.Foundation.Collections.h"
 
 namespace CodePush
 {
 	using namespace winrt;
 	using namespace Microsoft::ReactNative;
 	using namespace Windows::Data::Json;
+	using namespace Windows::Foundation::Collections;
 
 	using namespace std;
 
 	struct CodePushConfig
 	{
 	private:
-		static const wstring AppVersionConfigKey{ L"appVersion" };
-		static const wstring BuildVersionConfigKey{ L"buildVersion" };
-		static const wstring ClientUniqueIDConfigKey{ L"clientUniqueId" };
-		static const wstring DeploymentKeyConfigKey{ L"deploymentKey" };
-		static const wstring ServerURLConfigKey{ L"serverUrl" };
-		static const wstring PublicKeyKey{ L"publicKey" };
+		inline static const wstring AppVersionConfigKey{ L"appVersion" };
+		inline static const wstring BuildVersionConfigKey{ L"buildVersion" };
+		inline static const wstring ClientUniqueIDConfigKey{ L"clientUniqueId" };
+		inline static const wstring DeploymentKeyConfigKey{ L"deploymentKey" };
+		inline static const wstring ServerURLConfigKey{ L"serverUrl" };
+		inline static const wstring PublicKeyKey{ L"publicKey" };
 
 		IMap<hstring, hstring> configuration;
 
@@ -42,7 +46,7 @@ namespace CodePush
 		hstring GetPublicKey() { return configuration.Lookup(PublicKeyKey); }
 		void SetPublicKey(wstring_view publicKey) { configuration.Insert(PublicKeyKey, publicKey); }
 
-		static CodePushConfig Init(IReactContext const& context);
+		static CodePushConfig Init(const ReactContext& context);
 
 	};
 }

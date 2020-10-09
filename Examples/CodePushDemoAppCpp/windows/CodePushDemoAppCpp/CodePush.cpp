@@ -152,7 +152,7 @@ void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
     auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
     m_host = res.as<ReactNativeHost>();
 
-    m_codePushConfig = CodePushConfig::Init(m_context);
+    m_codePushConfig = CodePushConfig::Init(reactContext);
 }
 
 void CodePush::CodePush::GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept

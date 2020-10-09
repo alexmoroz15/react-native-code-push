@@ -22,17 +22,16 @@ JsonObject CodePushConfig::GetConfiguration()
     return configObject;
 }
 
-CodePushConfig CodePushConfig::Init(IReactContext const& context)
+CodePushConfig CodePushConfig::Init(const ReactContext& context)
 {
     CodePushConfig config;
-
     std::optional<hstring> appVersion;
     std::optional<hstring> buildVersion;
     std::optional<hstring> deploymentKey;
     std::optional<hstring> publicKey;
     std::optional<hstring> serverUrl;
 
-    auto res = context.Properties().Get(ReactPropertyBagHelper::GetName(nullptr, L"Configuration")).try_as<IMap<hstring, hstring>>();
+    auto res = context.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"Configuration")).try_as<IMap<hstring, hstring>>();
     if (res != nullptr)
     {
         appVersion = res.TryLookup(AppVersionConfigKey);
@@ -42,41 +41,27 @@ CodePushConfig CodePushConfig::Init(IReactContext const& context)
         serverUrl = res.TryLookup(ServerURLConfigKey);
     }
 
-    auto addToConfiguration = [=](hstring key, ) {
-        
+    config.configuration = winrt::single_threaded_map<hstring, hstring>();
+    auto addToConfiguration = [=](wstring_view key, std::optional<hstring> optValue) {
+        if (optValue.has_value())
+        {
+            config.configuration.Insert(key, optValue.value());
+        }
     };
 
-    /*
-    if (appVersion.has_value())
-    {
-        config.configuration.Insert(AppVersionConfigKey, appVersion.value());
-    }
+    addToConfiguration(AppVersionConfigKey, appVersion);
+    addToConfiguration(BuildVersionConfigKey, buildVersion);
+    addToConfiguration(DeploymentKeyConfigKey, deploymentKey);
+    addToConfiguration(PublicKeyKey, publicKey);
+    addToConfiguration(ServerURLConfigKey, serverUrl);
 
-    if (buildVersion.has_value())
-    {
-        config.buildVersion = buildVersion.value();
-    }
-    if (clientUniqueId.has_value())
-    {
-        config.configuration.Insert(ClientUniqueIDConfigKey, clientUniqueId.value());
-    }
-    if (deploymentKey.has_value())
-    {
-        config.deploymentKey = deploymentKey.value();
-    }
-    if (publicKey.has_value())
-    {
-        config.publicKey = publicKey.value();
-    }
+    // set clientUniqueId
 
-    if (serverUrl.has_value())
+    if (!serverUrl.has_value())
     {
-        config.serverUrl = serverUrl.value();
+        config.configuration.Insert(ServerURLConfigKey, L"https://codepush.appcenter.ms/");
     }
-    else
-    {
-        config.serverUrl = L"https://codepush.appcenter.ms/";
-    }*/
+    return config;
 }
 
 /*
