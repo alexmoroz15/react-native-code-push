@@ -73,7 +73,7 @@ namespace CodePush
 		// These keys are used to inspect/augment the metadata
 		// that is associated with an update's package.
 		const wstring AppVersionKey{ L"appVersion" };
-		const wstring BinaryBundleDateKey{ L"binaryDate" };
+		const wstring BinaryDateKey{ L"binaryDate" }; // The date of the BUILD -> the modified date of the executable
 		const wstring PackageHashKey{ L"packageHash" };
 		const wstring PackageIsPendingKey{ L"isPending" };
 
@@ -123,7 +123,7 @@ namespace CodePush
 			LATEST = 2
 		};
 
-		static path GetBinaryBundlePath();
+		static IAsyncOperation<StorageFile> GetBinaryAsync();
 		static IAsyncOperation<StorageFile> GetBundleFileAsync();
 		static path GetBundlePath();
 

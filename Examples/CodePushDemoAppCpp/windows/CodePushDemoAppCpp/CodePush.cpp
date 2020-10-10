@@ -34,10 +34,25 @@ using namespace Windows::Foundation;
 
 using namespace std::filesystem;
 
-path CodePush::CodePush::GetBinaryBundlePath() { return nullptr; }
+IAsyncOperation<StorageFile> CodePush::CodePush::GetBinaryAsync() 
+{ 
+    //return nullptr;
+    Uri binaryUri{ L"ms-appx://" };
+    auto binaryFolder{ co_await StorageFolder::GetFolderFromPathAsync(binaryUri.Path()) };
+    auto binaryFolderFiles{ co_await binaryFolder.GetFilesAsync() };
+    for (const auto& file : binaryFolderFiles)
+    {
+        wstring fileName{ file.Name() };
+        if (fileName.rfind(L".exe") != wstring::npos)
+        {
+            co_return file;
+        }
+    }
+    co_return nullptr;
+}
 
 IAsyncOperation<StorageFile> CodePush::CodePush::GetBundleFileAsync() { co_return nullptr; }
-path CodePush::CodePush::GetBundlePath() { return nullptr; }
+//path CodePush::CodePush::GetBundlePath() { return nullptr; }
 
 void CodePush::CodePush::OverrideAppVersion(wstring appVersion) {}
 void CodePush::CodePush::SetDeploymentKey(wstring deploymentKey) {}
@@ -288,11 +303,14 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
 fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept
 {
     auto mutableUpdatePackage{ updatePackage };
+    auto binary{ co_await GetBinaryAsync() };
+    /*
     path binaryBundlePath{ GetBinaryBundlePath() };
     if (!binaryBundlePath.empty())
     {
         mutableUpdatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(CodePushUpdateUtils::ModifiedDateStringOfFileAtPath(binaryBundlePath)));
     }
+    */
 
     bool paused{ false };
     if (notifyProgress)
@@ -414,21 +432,12 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSDictionary*)updatePackage
  */
 void CodePush::CodePush::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
 {
-    JsonObject configMap;
-    
-    auto res = m_context.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"Configuration")).try_as<IMap<hstring, hstring>>();
-    if (res != nullptr)
+    auto configuration{ m_codePushConfig.GetConfiguration() };
+    if (isRunningBinaryVersion)
     {
-        for (const auto& pair : res)
-        {
-            configMap.Insert(pair.Key(), JsonValue::CreateStringValue(pair.Value()));
-        }
-        promise.Resolve(configMap);
+        // ...
     }
-    else
-    {
-        promise.Resolve(JsonValue::CreateNullValue());
-    }
+    promise.Resolve(configuration);
 }
 
 /*
@@ -467,7 +476,91 @@ RCT_EXPORT_METHOD(getConfiguration:(RCTPromiseResolveBlock)resolve
 /*
  * This method is the native side of the CodePush.getUpdateMetadata method.
  */
-fire_and_forget CodePush::CodePush::GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<JsonObject> promise) noexcept { co_return; }
+fire_and_forget CodePush::CodePush::GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<JsonObject> promise) noexcept 
+{
+    /*
+    // Get the current package
+    auto currentPackage{ co_await CodePushPackage::GetCurrentPackageAsync() };
+    
+    //auto currentUpdateIsPending{ currentPackage.GetNamedBoolean(L"isPending", false) };
+    auto currentUpdateIsPending = false;
+
+    if (updateState == CodePushUpdateState::PENDING && !currentUpdateIsPending)
+    {
+        promise.Resolve(JsonValue::CreateNullValue().try_as<IJsonValue>());
+    }
+    else if (updateState == CodePushUpdateState::RUNNING && currentUpdateIsPending)
+    {
+        auto previousPackage{ co_await CodePushPackage::GetPreviousPackageAsync() };
+        if (previousPackage == nullptr)
+        {
+            promise.Resolve(JsonValue::CreateNullValue().try_as<IJsonValue>());
+            co_return;
+        }
+
+        promise.Resolve(previousPackage);
+    }
+    else
+    {
+        if (IsRunningBinaryVersion())
+        {
+            currentPackage.Insert(L"_isDebugOnly", JsonValue::CreateBooleanValue(true));
+        }
+
+        currentPackage.Insert(L"isPending", JsonValue::CreateBooleanValue(currentUpdateIsPending));
+        promise.Resolve(currentPackage);
+    }
+    co_return;
+    */
+    co_return; 
+}
+
+/*
+RCT_EXPORT_METHOD(getUpdateMetadata:(CodePushUpdateState)updateState
+                           resolver:(RCTPromiseResolveBlock)resolve
+                           rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSError *error;
+    NSMutableDictionary *package = [[CodePushPackage getCurrentPackage:&error] mutableCopy];
+
+    if (error) {
+        return reject([NSString stringWithFormat: @"%lu", (long)error.code], error.localizedDescription, error);
+    } else if (package == nil) {
+        // The app hasn't downloaded any CodePush updates yet,
+        // so we simply return nil regardless if the user
+        // wanted to retrieve the pending or running update.
+        return resolve(nil);
+    }
+
+    // We have a CodePush update, so let's see if it's currently in a pending state.
+    BOOL currentUpdateIsPending = [[self class] isPendingUpdate:[package objectForKey:PackageHashKey]];
+
+    if (updateState == CodePushUpdateStatePending && !currentUpdateIsPending) {
+        // The caller wanted a pending update
+        // but there isn't currently one.
+        resolve(nil);
+    } else if (updateState == CodePushUpdateStateRunning && currentUpdateIsPending) {
+        // The caller wants the running update, but the current
+        // one is pending, so we need to grab the previous.
+        resolve([CodePushPackage getPreviousPackage:&error]);
+    } else {
+        // The current package satisfies the request:
+        // 1) Caller wanted a pending, and there is a pending update
+        // 2) Caller wanted the running update, and there isn't a pending
+        // 3) Caller wants the latest update, regardless if it's pending or not
+        if (isRunningBinaryVersion) {
+            // This only matters in Debug builds. Since we do not clear "outdated" updates,
+            // we need to indicate to the JS side that somehow we have a current update on
+            // disk that is not actually running.
+            [package setObject:@(YES) forKey:@"_isDebugOnly"];
+        }
+
+        // Enable differentiating pending vs. non-pending updates
+        [package setObject:@(currentUpdateIsPending) forKey:PackageIsPendingKey];
+        resolve(package);
+    }
+}
+*/
 
 /*
  * This method is the native side of the LocalPackage.install method.
