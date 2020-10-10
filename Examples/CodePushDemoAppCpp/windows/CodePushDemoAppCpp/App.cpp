@@ -34,7 +34,7 @@ using namespace std;
 /// </summary>
 App::App() noexcept
 {
-/*#if BUNDLE
+#if BUNDLE
 
     //InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
 
@@ -45,17 +45,17 @@ App::App() noexcept
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
     InstanceSettings().UseFastRefresh(false);
-#else*/
+#else
     JavaScriptMainModuleName(L"index");
     InstanceSettings().UseWebDebugger(true);
     InstanceSettings().UseFastRefresh(true);
-//#endif
+#endif
 
-/*#if _DEBUG
+#if _DEBUG
     InstanceSettings().UseDeveloperSupport(true);
-#else*/
+#else
     InstanceSettings().UseDeveloperSupport(false);
-//#endif
+#endif
 
     RegisterAutolinkedNativeModulePackages(PackageProviders()); // Includes any autolinked modules
 
