@@ -75,7 +75,7 @@ namespace CodePush
 		static IAsyncOperation<JsonObject> GetPreviousPackageAsync();
 		static IAsyncOperation<path> GetCurrentPackageFolderPathAsync();
 		static IAsyncOperation<path> GetCurrentPackageBundlePathAsync();
-		static IAsyncOperation<wstring> GetCurrentPackageHashAsync();
+		static IAsyncOperation<hstring> GetCurrentPackageHashAsync();
 
 		static IAsyncOperation<JsonObject> GetPackageAsync(wstring_view packageHash);
 

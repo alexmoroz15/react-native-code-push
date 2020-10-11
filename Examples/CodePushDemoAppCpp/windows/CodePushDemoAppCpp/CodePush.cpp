@@ -7,6 +7,7 @@
 #include "CodePushTelemetryManager.h"
 #include "CodePushConfig.h"
 #include "App.h"
+//#include "JSValueAdditions.h"
 
 #include <winrt/Windows.Data.Json.h>
 #include <winrt/Windows.Web.Http.h>
@@ -32,7 +33,8 @@ using namespace Windows::Storage;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation;
 
-using namespace std::filesystem;
+using namespace std;
+using namespace filesystem;
 
 IAsyncOperation<StorageFile> CodePush::CodePush::GetBinaryAsync() 
 { 
@@ -51,19 +53,25 @@ IAsyncOperation<StorageFile> CodePush::CodePush::GetBinaryAsync()
     co_return nullptr;
 }
 
+// Rather than store files in the library files, CodePush for ReactNativeWindows will use AppData folders.
+path CodePush::CodePush::GetLocalStoragePath()
+{
+    return wstring_view(ApplicationData::Current().LocalFolder().Path());
+}
+
 IAsyncOperation<StorageFile> CodePush::CodePush::GetBundleFileAsync() { co_return nullptr; }
 //path CodePush::CodePush::GetBundlePath() { return nullptr; }
 
-void CodePush::CodePush::OverrideAppVersion(wstring appVersion) {}
-void CodePush::CodePush::SetDeploymentKey(wstring deploymentKey) {}
+void CodePush::CodePush::OverrideAppVersion(wstring_view appVersion) {}
+void CodePush::CodePush::SetDeploymentKey(wstring_view deploymentKey) {}
 
 bool CodePush::CodePush::IsFailedHash(wstring_view packageHash) { return false; }
 
 JsonObject CodePush::CodePush::GetRollbackInfo() { return nullptr; }
 //void SetLatestRollbackInfo(wstring packageHash);
-int CodePush::CodePush::GetRollbackCountForPackage(wstring packageHash, JsonObject latestRollbackInfo) { return 0; }
+int CodePush::CodePush::GetRollbackCountForPackage(wstring_view packageHash, JsonObject latestRollbackInfo) { return 0; }
 
-bool CodePush::CodePush::IsPendingUpdate(wstring packageHash) { return false; }
+bool CodePush::CodePush::IsPendingUpdate(wstring_view packageHash) { return false; }
 
 bool CodePush::CodePush::IsUsingTestConfiguration() { return false; }
 void CodePush::CodePush::SetUsingTestConfiguration() {}
@@ -211,7 +219,7 @@ IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder rootFolder, p
     co_return file;
 }
 
-IAsyncOperation<hstring> FindFilePathAsync(const StorageFolder& rootFolder, std::wstring_view fileName)
+IAsyncOperation<hstring> FindFilePathAsync(const StorageFolder& rootFolder, wstring_view fileName)
 {
     std::stack<StorageFolder> candidateFolders;
     candidateFolders.push(rootFolder);
@@ -300,7 +308,7 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
 /*
  * This is native-side of the RemotePackage.download method
  */
-fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept
+fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<IJsonValue> promise) noexcept
 {
     auto mutableUpdatePackage{ updatePackage };
     auto binary{ co_await GetBinaryAsync() };
@@ -476,42 +484,46 @@ RCT_EXPORT_METHOD(getConfiguration:(RCTPromiseResolveBlock)resolve
 /*
  * This method is the native side of the CodePush.getUpdateMetadata method.
  */
-fire_and_forget CodePush::CodePush::GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<JsonObject> promise) noexcept 
+fire_and_forget CodePush::CodePush::GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<IJsonValue> promise) noexcept 
 {
-    /*
-    // Get the current package
-    auto currentPackage{ co_await CodePushPackage::GetCurrentPackageAsync() };
-    
-    //auto currentUpdateIsPending{ currentPackage.GetNamedBoolean(L"isPending", false) };
-    auto currentUpdateIsPending = false;
-
-    if (updateState == CodePushUpdateState::PENDING && !currentUpdateIsPending)
+    auto package{ co_await CodePushPackage::GetCurrentPackageAsync() };
+    if (package == nullptr)
     {
-        promise.Resolve(JsonValue::CreateNullValue().try_as<IJsonValue>());
+        // The app hasn't downloaded any CodePush updates yet,
+        // so we simply return nil regardless if the user
+        // wanted to retrieve the pending or running update.
+        promise.Resolve(JsonValue::CreateNullValue());
     }
-    else if (updateState == CodePushUpdateState::RUNNING && currentUpdateIsPending)
-    {
-        auto previousPackage{ co_await CodePushPackage::GetPreviousPackageAsync() };
-        if (previousPackage == nullptr)
-        {
-            promise.Resolve(JsonValue::CreateNullValue().try_as<IJsonValue>());
-            co_return;
+
+    // We have a CodePush update, so let's see if it's currently in a pending state.
+    bool currentUpdateIsPending{ IsPendingUpdate(package.GetNamedString(PackageHashKey)) };
+
+    if (updateState == CodePushUpdateState::PENDING && !currentUpdateIsPending) {
+        // The caller wanted a pending update
+        // but there isn't currently one.
+        promise.Resolve(JsonValue::CreateNullValue());
+    }
+    else if (updateState == CodePushUpdateState::RUNNING && currentUpdateIsPending) {
+        // The caller wants the running update, but the current
+        // one is pending, so we need to grab the previous.
+        promise.Resolve(co_await CodePushPackage::GetPreviousPackageAsync());
+    }
+    else {
+        // The current package satisfies the request:
+        // 1) Caller wanted a pending, and there is a pending update
+        // 2) Caller wanted the running update, and there isn't a pending
+        // 3) Caller wants the latest update, regardless if it's pending or not
+        if (isRunningBinaryVersion) {
+            // This only matters in Debug builds. Since we do not clear "outdated" updates,
+            // we need to indicate to the JS side that somehow we have a current update on
+            // disk that is not actually running.
+            package.Insert(L"_isDebugOnly", JsonValue::CreateBooleanValue(true));
         }
 
-        promise.Resolve(previousPackage);
+        // Enable differentiating pending vs. non-pending updates
+        package.Insert(PackageIsPendingKey, JsonValue::CreateBooleanValue(currentUpdateIsPending));
+        promise.Resolve(package);
     }
-    else
-    {
-        if (IsRunningBinaryVersion())
-        {
-            currentPackage.Insert(L"_isDebugOnly", JsonValue::CreateBooleanValue(true));
-        }
-
-        currentPackage.Insert(L"isPending", JsonValue::CreateBooleanValue(currentUpdateIsPending));
-        promise.Resolve(currentPackage);
-    }
-    co_return;
-    */
     co_return; 
 }
 
@@ -571,17 +583,17 @@ fire_and_forget CodePush::CodePush::InstallUpdateAsync(JsonObject updatePackage,
  * This method isn't publicly exposed via the "react-native-code-push"
  * module, and is only used internally to populate the RemotePackage.failedInstall property.
  */
-void CodePush::CodePush::IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept {}
+void CodePush::CodePush::IsFailedUpdate(wstring_view packageHash, ReactPromise<bool> promise) noexcept {}
 
-void CodePush::CodePush::SetLatestRollbackInfo(wstring packageHash) noexcept {}
+void CodePush::CodePush::SetLatestRollbackInfo(wstring_view packageHash) noexcept {}
 
-void CodePush::CodePush::GetLatestRollbackInfo(ReactPromise<JsonObject> promise) noexcept {}
+void CodePush::CodePush::GetLatestRollbackInfo(ReactPromise<IJsonValue> promise) noexcept {}
 
 /*
  * This method isn't publicly exposed via the "react-native-code-push"
  * module, and is only used internally to populate the LocalPackage.isFirstRun property.
  */
-void CodePush::CodePush::IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept {}
+void CodePush::CodePush::IsFirstRun(wstring_view packageHash, ReactPromise<bool> promise) noexcept {}
 
 /*
  * This method is the native side of the CodePush.notifyApplicationReady() method.
@@ -651,7 +663,7 @@ void CodePush::CodePush::ClearUpdates() noexcept {}
  * removeBundleUrl. It is only to be used during tests and no-ops if the test
  * configuration flag is not set.
  */
-void CodePush::CodePush::DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept {}
+void CodePush::CodePush::DownloadAndReplaceCurrentBundle(wstring_view remoteBundleUrl) noexcept {}
 
 /*
  * This method is checks if a new status update exists (new version was installed,

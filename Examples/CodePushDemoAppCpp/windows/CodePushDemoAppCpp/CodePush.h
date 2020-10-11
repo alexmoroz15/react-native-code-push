@@ -7,6 +7,7 @@
 #include <filesystem>
 
 #include "CodePushConfig.h"
+//#include "JSValueAdditions.h"
 
 // Helper functions for reading and sending JsonValues to and from JavaScript
 namespace winrt::Microsoft::ReactNative
@@ -128,21 +129,19 @@ namespace CodePush
 		static path GetBundlePath();
 
 		// Not sure exactly why these methods exist
-		/*
-		StorageFolder GetLocalStorageFolder();
+		static path GetLocalStoragePath();
 		path GetBundleAssetsPath();
-		*/
-
-		void OverrideAppVersion(wstring appVersion);
-		void SetDeploymentKey(wstring deploymentKey);
+		
+		void OverrideAppVersion(wstring_view appVersion);
+		void SetDeploymentKey(wstring_view deploymentKey);
 
 		bool IsFailedHash(wstring_view packageHash);
 
 		JsonObject GetRollbackInfo();
-		//void SetLatestRollbackInfo(wstring packageHash);
-		int GetRollbackCountForPackage(wstring packageHash, JsonObject latestRollbackInfo);
+		//void SetLatestRollbackInfo(wstring_view packageHash);
+		int GetRollbackCountForPackage(wstring_view packageHash, JsonObject latestRollbackInfo);
 
-		bool IsPendingUpdate(wstring packageHash);
+		bool IsPendingUpdate(wstring_view packageHash);
 
 		bool IsUsingTestConfiguration();
 		void SetUsingTestConfiguration();
@@ -158,7 +157,7 @@ namespace CodePush
 		 * This is native-side of the RemotePackage.download method
 		 */
 		REACT_METHOD(DownloadUpdateAsync, L"downloadUpdate");
-		fire_and_forget DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<JsonObject> promise) noexcept;
+		fire_and_forget DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<IJsonValue> promise) noexcept;
 
         /*
          * This is the native side of the CodePush.getConfiguration method. It isn't
@@ -173,7 +172,7 @@ namespace CodePush
          * This method is the native side of the CodePush.getUpdateMetadata method.
          */
 		REACT_METHOD(GetUpdateMetadataAsync, L"getUpdateMetadata");
-		fire_and_forget GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<JsonObject> promise) noexcept;
+		fire_and_forget GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<IJsonValue> promise) noexcept;
 
         /*
          * This method is the native side of the LocalPackage.install method.
@@ -186,20 +185,20 @@ namespace CodePush
          * module, and is only used internally to populate the RemotePackage.failedInstall property.
          */
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept;
+		void IsFailedUpdate(wstring_view packageHash, ReactPromise<bool> promise) noexcept;
 
 		REACT_METHOD(SetLatestRollbackInfo, L"setLatestRollbackInfo");
-		void SetLatestRollbackInfo(wstring packageHash) noexcept;
+		void SetLatestRollbackInfo(wstring_view packageHash) noexcept;
 
 		REACT_METHOD(GetLatestRollbackInfo, L"getLatestRollbackInfo");
-		void GetLatestRollbackInfo(ReactPromise<JsonObject> promise) noexcept;
+		void GetLatestRollbackInfo(ReactPromise<IJsonValue> promise) noexcept;
 
         /*
          * This method isn't publicly exposed via the "react-native-code-push"
          * module, and is only used internally to populate the LocalPackage.isFirstRun property.
          */
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept;
+		void IsFirstRun(wstring_view packageHash, ReactPromise<bool> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.notifyApplicationReady() method.
@@ -240,7 +239,7 @@ namespace CodePush
          * configuration flag is not set.
          */
 		REACT_METHOD(DownloadAndReplaceCurrentBundle, L"downloadAndReplaceCurrentBundle");
-		void DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept;
+		void DownloadAndReplaceCurrentBundle(wstring_view remoteBundleUrl) noexcept;
 
         /*
          * This method is checks if a new status update exists (new version was installed,
@@ -257,5 +256,3 @@ namespace CodePush
 
 	};
 }
-
-
