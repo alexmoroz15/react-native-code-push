@@ -1,6 +1,6 @@
 #include "pch.h"
 
-//#include "CodePush.h"
+#include "CodePushNativeModule.h"
 #include "CodePushPackage.h"
 //#include "JSValueAdditions.h"
 
@@ -20,9 +20,11 @@ using namespace Windows::Foundation;
 
 using namespace std;
 
+const wstring StatusFile{ L"codepush.json" };
+
 IAsyncOperation<JsonObject> GetCurrentPackageInfoAsync();
 IAsyncOperation<hstring> GetPreviousPackageHashAsync();
-wstring GetStatusFilePath();
+path GetStatusFilePath();
 
 IAsyncAction CodePushPackage::DownloadPackageAsync(
 	JsonObject updatePackage,
@@ -376,6 +378,10 @@ IAsyncOperation<JsonObject> CodePushPackage::GetCurrentPackageAsync()
 IAsyncOperation<hstring> CodePushPackage::GetCurrentPackageHashAsync()
 {
     auto info{ co_await GetCurrentPackageInfoAsync() };
+    if (info == nullptr)
+    {
+        co_return L"";
+    }
     co_return info.Lookup(L"currentPackage").GetString();
     //co_return nullptr;
 }
@@ -394,7 +400,18 @@ IAsyncOperation<hstring> CodePushPackage::GetCurrentPackageHashAsync()
 
 IAsyncOperation<JsonObject> GetCurrentPackageInfoAsync()
 {
-    auto statusFilePath{ GetStatusFilePath() };
+    try
+    {
+        auto statusFilePath{ GetStatusFilePath() };
+        auto statusFile{ co_await StorageFile::GetFileFromPathAsync(statusFilePath.wstring()) };
+        auto content{ co_await FileIO::ReadTextAsync(statusFile) };
+        auto json{ JsonObject::Parse(content) };
+        co_return json;
+    }
+    catch (const hresult_error& ex)
+    {
+        co_return nullptr;
+    }
     co_return nullptr;
 }
 
@@ -453,11 +470,10 @@ IAsyncOperation<JsonObject> CodePushPackage::GetPackageAsync(wstring_view packag
 	co_return nullptr;
 }
 
-wstring GetStatusFilePath()
+path GetStatusFilePath()
 {
-    //WriteValue(nullptr, nullptr);
-    //ReadValue(nullptr, nullptr);
-    return L"";
+    auto localStorage{ CodePushNativeModule::GetLocalStoragePath() };
+    return localStorage / StatusFile;
 }
 
 /*
