@@ -52,16 +52,14 @@ namespace CodePush
 	struct CodePushPackage
 	{
 	private:
-
-		const wstring DiffManifestFileName{ L"hotcodepush.json" };
-		const wstring DownloadFileName{ L"download.zip" };
-		const wstring RelativeBundlePathKey{ L"bundlePath" };
-		const wstring StatusFile{ L"codepush.json" };
-		const wstring UpdateBundleFileName{ L"app.jsbundle" };
-		const wstring UpdateMetadataFileName{ L"app.json" };
-		const wstring UnzippedFolderName{ L"unzipped" };
-
 	public:
+		inline static const wstring DiffManifestFileName{ L"hotcodepush.json" };
+		inline static const wstring DownloadFileName{ L"download.zip" };
+		inline static const wstring RelativeBundlePathKey{ L"bundlePath" };
+		inline static const wstring StatusFile{ L"codepush.json" };
+		inline static const wstring UpdateBundleFileName{ L"app.jsbundle" };
+		inline static const wstring UpdateMetadataFileName{ L"app.json" };
+		inline static const wstring UnzippedFolderName{ L"unzipped" };
 
 		static IAsyncAction DownloadPackageAsync(
 			JsonObject updatePackage,
