@@ -1,6 +1,6 @@
 #include "pch.h"
 
-#include "CodePush.h"
+#include "CodePushNativeModule.h"
 #include "CodePushUtils.h"
 #include "CodePushUpdateUtils.h"
 #include "CodePushPackage.h"
@@ -36,7 +36,9 @@ using namespace Windows::Foundation;
 using namespace std;
 using namespace filesystem;
 
-IAsyncOperation<StorageFile> CodePush::CodePush::GetBinaryAsync() 
+using namespace CodePush;
+
+IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryAsync() 
 { 
     //return nullptr;
     Uri binaryUri{ L"ms-appx://" };
@@ -53,31 +55,32 @@ IAsyncOperation<StorageFile> CodePush::CodePush::GetBinaryAsync()
     co_return nullptr;
 }
 
+
+IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync() { co_return nullptr; }
+//path CodePushNativeModule::GetBundlePath() { return nullptr; }
+
 // Rather than store files in the library files, CodePush for ReactNativeWindows will use AppData folders.
-path CodePush::CodePush::GetLocalStoragePath()
+path CodePushNativeModule::GetLocalStoragePath()
 {
     return wstring_view(ApplicationData::Current().LocalFolder().Path());
 }
 
-IAsyncOperation<StorageFile> CodePush::CodePush::GetBundleFileAsync() { co_return nullptr; }
-//path CodePush::CodePush::GetBundlePath() { return nullptr; }
+void CodePushNativeModule::OverrideAppVersion(wstring_view appVersion) {}
+void CodePushNativeModule::SetDeploymentKey(wstring_view deploymentKey) {}
 
-void CodePush::CodePush::OverrideAppVersion(wstring_view appVersion) {}
-void CodePush::CodePush::SetDeploymentKey(wstring_view deploymentKey) {}
+bool CodePushNativeModule::IsFailedHash(wstring_view packageHash) { return false; }
 
-bool CodePush::CodePush::IsFailedHash(wstring_view packageHash) { return false; }
-
-JsonObject CodePush::CodePush::GetRollbackInfo() { return nullptr; }
+JsonObject CodePushNativeModule::GetRollbackInfo() { return nullptr; }
 //void SetLatestRollbackInfo(wstring packageHash);
-int CodePush::CodePush::GetRollbackCountForPackage(wstring_view packageHash, JsonObject latestRollbackInfo) { return 0; }
+int CodePushNativeModule::GetRollbackCountForPackage(wstring_view packageHash, JsonObject latestRollbackInfo) { return 0; }
 
-bool CodePush::CodePush::IsPendingUpdate(wstring_view packageHash) { return false; }
+bool CodePushNativeModule::IsPendingUpdate(wstring_view packageHash) { return false; }
 
-bool CodePush::CodePush::IsUsingTestConfiguration() { return false; }
-void CodePush::CodePush::SetUsingTestConfiguration() {}
+bool CodePushNativeModule::IsUsingTestConfiguration() { return false; }
+void CodePushNativeModule::SetUsingTestConfiguration() {}
 //void ClearUpdates();
 
-void CodePush::CodePush::DispatchDownloadProgressEvent() 
+void CodePushNativeModule::DispatchDownloadProgressEvent() 
 {
     // Notify the script-side about the progress
     m_context.CallJSFunction(
@@ -89,7 +92,7 @@ void CodePush::CodePush::DispatchDownloadProgressEvent()
             {"receivedBytes", m_latestReceivedContentLength } });
 }
 
-void CodePush::CodePush::LoadBundle()
+void CodePushNativeModule::LoadBundle()
 {
     m_host.InstanceSettings().UIDispatcher().Post([host = m_host]() {
         host.ReloadInstance();
@@ -100,7 +103,7 @@ void CodePush::CodePush::LoadBundle()
  * This method is used to register the fact that a pending
  * update succeeded and therefore can be removed.
  */
-void CodePush::CodePush::RemovePendingUpdate()
+void CodePushNativeModule::RemovePendingUpdate()
 {
     // remove pending update from LocalSettings
 }
@@ -114,7 +117,7 @@ void CodePush::CodePush::RemovePendingUpdate()
 }
 */
 
-void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
+void CodePushNativeModule::RestartAppInternal(bool onlyIfUpdateIsPending)
 {
     if (m_restartInProgress)
     {
@@ -150,7 +153,7 @@ void CodePush::CodePush::RestartAppInternal(bool onlyIfUpdateIsPending)
  * to store its hash so that it can be ignored on future
  * attempts to check the server for an update.
  */
-void CodePush::CodePush::SaveFailedUpdate(JsonObject& failedPackage)
+void CodePushNativeModule::SaveFailedUpdate(JsonObject& failedPackage)
 {
     if (IsFailedHash(failedPackage.GetNamedString(PackageHashKey)))
     {
@@ -168,7 +171,7 @@ void CodePush::CodePush::SaveFailedUpdate(JsonObject& failedPackage)
     localSettings.Values().Insert(FailedUpdatesKey, failedUpdates);
 }
 
-void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
+void CodePushNativeModule::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
 
@@ -178,7 +181,7 @@ void CodePush::CodePush::Initialize(ReactContext const& reactContext) noexcept
     m_codePushConfig = CodePushConfig::Init(reactContext);
 }
 
-void CodePush::CodePush::GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
+void CodePushNativeModule::GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
 {
     constants.Add(L"codePushInstallModeImmediate", CodePushInstallMode::IMMEDIATE);
     constants.Add(L"codePushInstallModeOnNextRestart", CodePushInstallMode::ON_NEXT_RESTART);
@@ -308,7 +311,7 @@ IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
 /*
  * This is native-side of the RemotePackage.download method
  */
-fire_and_forget CodePush::CodePush::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<IJsonValue> promise) noexcept
+fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<IJsonValue> promise) noexcept
 {
     auto mutableUpdatePackage{ updatePackage };
     auto binary{ co_await GetBinaryAsync() };
@@ -438,7 +441,7 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSDictionary*)updatePackage
  * internally only by the CodePush.checkForUpdate method in order to get the
  * app version, as well as the deployment key that was configured in the Info.plist file.
  */
-void CodePush::CodePush::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
+void CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
 {
     auto configuration{ m_codePushConfig.GetConfiguration() };
     if (isRunningBinaryVersion)
@@ -484,7 +487,7 @@ RCT_EXPORT_METHOD(getConfiguration:(RCTPromiseResolveBlock)resolve
 /*
  * This method is the native side of the CodePush.getUpdateMetadata method.
  */
-fire_and_forget CodePush::CodePush::GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<IJsonValue> promise) noexcept 
+fire_and_forget CodePushNativeModule::GetUpdateMetadataAsync(CodePushUpdateState updateState, ReactPromise<IJsonValue> promise) noexcept 
 {
     auto package{ co_await CodePushPackage::GetCurrentPackageAsync() };
     if (package == nullptr)
@@ -577,28 +580,28 @@ RCT_EXPORT_METHOD(getUpdateMetadata:(CodePushUpdateState)updateState
 /*
  * This method is the native side of the LocalPackage.install method.
  */
-fire_and_forget CodePush::CodePush::InstallUpdateAsync(JsonObject updatePackage, CodePushInstallMode installMode, int minimumBackgroundDuration, ReactPromise<void> promise) noexcept { co_return; }
+fire_and_forget CodePushNativeModule::InstallUpdateAsync(JsonObject updatePackage, CodePushInstallMode installMode, int minimumBackgroundDuration, ReactPromise<void> promise) noexcept { co_return; }
 
 /*
  * This method isn't publicly exposed via the "react-native-code-push"
  * module, and is only used internally to populate the RemotePackage.failedInstall property.
  */
-void CodePush::CodePush::IsFailedUpdate(wstring_view packageHash, ReactPromise<bool> promise) noexcept {}
+void CodePushNativeModule::IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept {}
 
-void CodePush::CodePush::SetLatestRollbackInfo(wstring_view packageHash) noexcept {}
+void CodePushNativeModule::SetLatestRollbackInfo(wstring packageHash) noexcept {}
 
-void CodePush::CodePush::GetLatestRollbackInfo(ReactPromise<IJsonValue> promise) noexcept {}
+void CodePushNativeModule::GetLatestRollbackInfo(ReactPromise<IJsonValue> promise) noexcept {}
 
 /*
  * This method isn't publicly exposed via the "react-native-code-push"
  * module, and is only used internally to populate the LocalPackage.isFirstRun property.
  */
-void CodePush::CodePush::IsFirstRun(wstring_view packageHash, ReactPromise<bool> promise) noexcept {}
+void CodePushNativeModule::IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept {}
 
 /*
  * This method is the native side of the CodePush.notifyApplicationReady() method.
  */
-void CodePush::CodePush::NotifyApplicationReady(ReactPromise<IJsonValue> promise) noexcept
+void CodePushNativeModule::NotifyApplicationReady(ReactPromise<IJsonValue> promise) noexcept
 {
     RemovePendingUpdate();
     promise.Resolve(JsonValue::CreateNullValue());
@@ -613,7 +616,7 @@ RCT_EXPORT_METHOD(notifyApplicationReady:(RCTPromiseResolveBlock)resolve
 }
 */
 
-void CodePush::CodePush::Allow(ReactPromise<JSValue> promise) noexcept 
+void CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept 
 {
     CodePushUtils::Log(L"Re-allowing restarts.");
     m_allowed = true;
@@ -629,9 +632,9 @@ void CodePush::CodePush::Allow(ReactPromise<JSValue> promise) noexcept
     promise.Resolve(JSValue::Null);
 }
 
-void CodePush::CodePush::ClearPendingRestart() noexcept {}
+void CodePushNativeModule::ClearPendingRestart() noexcept {}
 
-void CodePush::CodePush::Disallow(ReactPromise<JSValue> promise) noexcept
+void CodePushNativeModule::Disallow(ReactPromise<JSValue> promise) noexcept
 {
     CodePushUtils::Log(L"Disallowing restarts.");
     m_allowed = false;
@@ -641,7 +644,7 @@ void CodePush::CodePush::Disallow(ReactPromise<JSValue> promise) noexcept
 /*
  * This method is the native side of the CodePush.restartApp() method.
  */
-void CodePush::CodePush::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue> promise) noexcept 
+void CodePushNativeModule::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue> promise) noexcept 
 {
     RestartAppInternal(onlyIfUpdateIsPending);
     promise.Resolve(JSValue::Null);
@@ -653,7 +656,7 @@ void CodePush::CodePush::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSV
  * Note: we don’t recommend to use this method in scenarios other than that (CodePush will call this method
  * automatically when needed in other cases) as it could lead to unpredictable behavior.
  */
-void CodePush::CodePush::ClearUpdates() noexcept {}
+void CodePushNativeModule::ClearUpdates() noexcept {}
 
 // #pragma mark - JavaScript-exported module methods (Private)
 
@@ -663,13 +666,13 @@ void CodePush::CodePush::ClearUpdates() noexcept {}
  * removeBundleUrl. It is only to be used during tests and no-ops if the test
  * configuration flag is not set.
  */
-void CodePush::CodePush::DownloadAndReplaceCurrentBundle(wstring_view remoteBundleUrl) noexcept {}
+void CodePushNativeModule::DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept {}
 
 /*
  * This method is checks if a new status update exists (new version was installed,
  * or an update failed) and return its details (version label, status).
  */
-fire_and_forget CodePush::CodePush::GetNewStatusReportAsync(ReactPromise<IJsonValue> promise) noexcept 
+fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJsonValue> promise) noexcept 
 {
     /*
     if (needToReportRollback)
@@ -742,9 +745,9 @@ RCT_EXPORT_METHOD(getNewStatusReport:(RCTPromiseResolveBlock)resolve
 }
 */
 
-void CodePush::CodePush::RecordStatusReported(JsonObject statusReport) noexcept {}
+void CodePushNativeModule::RecordStatusReported(JsonObject statusReport) noexcept {}
 
-void CodePush::CodePush::SaveStatusReportForRetry(JsonObject statusReport) noexcept {}
+void CodePushNativeModule::SaveStatusReportForRetry(JsonObject statusReport) noexcept {}
 
 // Helper functions for reading and sending JsonValues to and from JavaScript
 namespace winrt::Microsoft::ReactNative

@@ -28,8 +28,8 @@ namespace CodePush
 	using namespace std;
 	using namespace filesystem;
 
-	REACT_MODULE(CodePush);
-	struct CodePush
+	REACT_MODULE(CodePushNativeModule);
+	struct CodePushNativeModule
 	{
 		enum class CodePushInstallMode;
 
@@ -185,10 +185,10 @@ namespace CodePush
          * module, and is only used internally to populate the RemotePackage.failedInstall property.
          */
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void IsFailedUpdate(wstring_view packageHash, ReactPromise<bool> promise) noexcept;
+		void IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept;
 
 		REACT_METHOD(SetLatestRollbackInfo, L"setLatestRollbackInfo");
-		void SetLatestRollbackInfo(wstring_view packageHash) noexcept;
+		void SetLatestRollbackInfo(wstring packageHash) noexcept;
 
 		REACT_METHOD(GetLatestRollbackInfo, L"getLatestRollbackInfo");
 		void GetLatestRollbackInfo(ReactPromise<IJsonValue> promise) noexcept;
@@ -198,7 +198,7 @@ namespace CodePush
          * module, and is only used internally to populate the LocalPackage.isFirstRun property.
          */
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void IsFirstRun(wstring_view packageHash, ReactPromise<bool> promise) noexcept;
+		void IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.notifyApplicationReady() method.
@@ -239,7 +239,7 @@ namespace CodePush
          * configuration flag is not set.
          */
 		REACT_METHOD(DownloadAndReplaceCurrentBundle, L"downloadAndReplaceCurrentBundle");
-		void DownloadAndReplaceCurrentBundle(wstring_view remoteBundleUrl) noexcept;
+		void DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept;
 
         /*
          * This method is checks if a new status update exists (new version was installed,

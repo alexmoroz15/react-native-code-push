@@ -15,9 +15,6 @@
     <ClCompile Include="miniz.c">
       <Filter>miniz</Filter>
     </ClCompile>
-    <ClCompile Include="CodePush.cpp">
-      <Filter>CodePush</Filter>
-    </ClCompile>
     <ClCompile Include="CodePushConfig.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
@@ -30,6 +27,9 @@
     <ClCompile Include="CodePushUpdateUtils.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
+    <ClCompile Include="CodePushNativeModule.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -38,9 +38,6 @@
     <ClInclude Include="AutolinkedNativeModules.g.h" />
     <ClInclude Include="miniz.h">
       <Filter>miniz</Filter>
-    </ClInclude>
-    <ClInclude Include="CodePush.h">
-      <Filter>CodePush</Filter>
     </ClInclude>
     <ClInclude Include="CodePushConfig.h">
       <Filter>CodePush</Filter>
@@ -58,6 +55,9 @@
       <Filter>CodePush</Filter>
     </ClInclude>
     <ClInclude Include="CodePushUtils.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="CodePushNativeModule.h">
       <Filter>CodePush</Filter>
     </ClInclude>
   </ItemGroup>
