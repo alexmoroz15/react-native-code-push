@@ -5,6 +5,7 @@
 #include "winrt/Windows.Data.Json.h"
 #include <string>
 #include <filesystem>
+#include <functional>
 
 /*
 
@@ -49,12 +50,17 @@ namespace CodePush
 		int64_t expectedContentLength;
 		int64_t receivedContentLength;
 		// Dispatch queue
-		// Progress callback
-		// Done callback
-		// Fail callback
+		function<void(int64_t, int64_t)> progressCallback;
+		function<void(bool)> doneCallback;
+		function<void(const hresult_error&)> failCallback;
 		wstring downloadUrl;
 
-		CodePushDownloadHandler(path downloadFilePath); // operationqueue, progresscallback, donecallback, failcallback
-		void Download(const wstring& url);
+		CodePushDownloadHandler(
+			path downloadFilePath,
+			function<void(int64_t, int64_t)> progressCallback,
+			function<void(bool)> doneCallback,
+			function<void(const hresult_error&)> failCallback);
+
+		void Download(wstring_view url);
 	};
 }
