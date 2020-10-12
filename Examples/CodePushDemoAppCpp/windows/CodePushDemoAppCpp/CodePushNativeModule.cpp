@@ -41,7 +41,7 @@ using namespace CodePush;
 IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryAsync() 
 { 
     //return nullptr;
-    Uri binaryUri{ L"ms-appx://" };
+    Uri binaryUri{ L"ms-appx:///" };
     auto binaryFolder{ co_await StorageFolder::GetFolderFromPathAsync(binaryUri.Path()) };
     auto binaryFolderFiles{ co_await binaryFolder.GetFilesAsync() };
     for (const auto& file : binaryFolderFiles)
@@ -56,7 +56,13 @@ IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryAsync()
 }
 
 
-IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync() { co_return nullptr; }
+IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync()
+{ 
+    co_return nullptr; 
+}
+
+
+
 //path CodePushNativeModule::GetBundlePath() { return nullptr; }
 
 // Rather than store files in the library files, CodePush for ReactNativeWindows will use AppData folders.
@@ -68,7 +74,63 @@ path CodePushNativeModule::GetLocalStoragePath()
 void CodePushNativeModule::OverrideAppVersion(wstring_view appVersion) {}
 void CodePushNativeModule::SetDeploymentKey(wstring_view deploymentKey) {}
 
-bool CodePushNativeModule::IsFailedHash(wstring_view packageHash) { return false; }
+/*
+ * This method checks to see whether a specific package hash
+ * has previously failed installation.
+ */
+bool CodePushNativeModule::IsFailedHash(wstring_view packageHash) 
+{ 
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    auto failedUpdates{ localSettings.Values().TryLookup(FailedUpdatesKey).try_as<JsonArray>() };
+    if (failedUpdates == nullptr || packageHash.empty())
+    {
+        return false;
+    }
+    else
+    {
+        for (const auto& failedPackage : failedUpdates)
+        {
+            // We don't have to worry about backwards compatability, but just to be safe...
+            if (failedPackage.ValueType() == JsonValueType::Object)
+            {
+                auto failedPackageHash{ failedPackage.GetObject().GetNamedString(PackageHashKey) };
+                if (packageHash == failedPackageHash)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}
+
+/*
++ (BOOL)isFailedHash:(NSString*)packageHash
+{
+    NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
+    NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
+    if (failedUpdates == nil || packageHash == nil) {
+        return NO;
+    } else {
+        for (NSDictionary *failedPackage in failedUpdates)
+        {
+            // Type check is needed for backwards compatibility, where we used to just store
+            // the failed package hash instead of the metadata. This only impacts "dev"
+            // scenarios, since in production we clear out old information whenever a new
+            // binary is applied.
+            if ([failedPackage isKindOfClass:[NSDictionary class]]) {
+                NSString *failedPackageHash = [failedPackage objectForKey:PackageHashKey];
+                if ([packageHash isEqualToString:failedPackageHash]) {
+                    return YES;
+                }
+            }
+        }
+
+        return NO;
+    }
+}
+*/
 
 JsonObject CodePushNativeModule::GetRollbackInfo() { return nullptr; }
 //void SetLatestRollbackInfo(wstring packageHash);
@@ -193,128 +255,13 @@ void CodePushNativeModule::GetConstants(winrt::Microsoft::ReactNative::ReactCons
     constants.Add(L"codePushUpdateStateLatest", CodePushUpdateState::LATEST);
 }
 
-IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder rootFolder, path& relPath)
-{
-    std::stack<std::string> pathParts;
-    pathParts.push(relPath.filename().string());
-    while (relPath.has_parent_path())
-    {
-        relPath = relPath.parent_path();
-        pathParts.push(relPath.filename().string());
-    }
-
-    while (pathParts.size() > 1)
-    {
-        auto itemName{ pathParts.top() };
-        auto item{ co_await rootFolder.TryGetItemAsync(to_hstring(itemName)) };
-        if (item == nullptr)
-        {
-            rootFolder = co_await rootFolder.CreateFolderAsync(to_hstring(itemName));
-        }
-        else
-        {
-            rootFolder = item.try_as<StorageFolder>();
-        }
-        pathParts.pop();
-    }
-    auto fileName{ pathParts.top() };
-    auto file{ co_await rootFolder.CreateFileAsync(to_hstring(fileName), CreationCollisionOption::ReplaceExisting) };
-    co_return file;
-}
-
-IAsyncOperation<hstring> FindFilePathAsync(const StorageFolder& rootFolder, wstring_view fileName)
-{
-    std::stack<StorageFolder> candidateFolders;
-    candidateFolders.push(rootFolder);
-
-    while (!candidateFolders.empty())
-    {
-        auto relRootFolder = candidateFolders.top();
-        candidateFolders.pop();
-
-        auto files{ co_await relRootFolder.GetFilesAsync() };
-        for (const auto& file : files)
-        {
-            if (file.Name() == fileName)
-            {
-                std::wstring filePath{ file.Path() };
-                hstring filePathSub{ filePath.substr(rootFolder.Path().size() + 1) };
-                co_return filePathSub;
-            }
-        }
-
-        auto folders{ co_await rootFolder.GetFoldersAsync() };
-        for (const auto& folder : folders)
-        {
-            candidateFolders.push(folder);
-        }
-    }
-
-    co_return L"";
-}
-
-IAsyncAction UnzipAsync(StorageFile& zipFile, StorageFolder& destination)
-{
-    std::string zipName{ to_string(zipFile.Path()) };
-
-    mz_bool status;
-    mz_zip_archive zip_archive;
-    mz_zip_zero_struct(&zip_archive);
-
-    status = mz_zip_reader_init_file(&zip_archive, zipName.c_str(), 0);
-    assert(status);
-    auto numFiles{ mz_zip_reader_get_num_files(&zip_archive) };
-
-    for (mz_uint i = 0; i < numFiles; i++)
-    {
-        mz_zip_archive_file_stat file_stat;
-        status = mz_zip_reader_file_stat(&zip_archive, i, &file_stat);
-        assert(status);
-        if (!mz_zip_reader_is_file_a_directory(&zip_archive, i))
-        {
-            auto fileName{ file_stat.m_filename };
-            auto filePath{ path(fileName) };
-            auto filePathName{ filePath.filename() };
-            auto filePathNameString{ filePathName.string() };
-
-            auto entryFile{ co_await CreateFileFromPathAsync(destination, filePath) };
-            auto stream{ co_await entryFile.OpenAsync(FileAccessMode::ReadWrite) };
-            auto os{ stream.GetOutputStreamAt(0) };
-            DataWriter dw{ os };
-
-            const auto arrBufSize = 8 * 1024;
-            std::array<uint8_t, arrBufSize> arrBuf;
-
-            mz_zip_reader_extract_iter_state* pState = mz_zip_reader_extract_iter_new(&zip_archive, i, 0);
-            //size_t bytesRead{ 0 };
-            while (size_t bytesRead{ mz_zip_reader_extract_iter_read(pState, static_cast<void*>(arrBuf.data()), arrBuf.size()) })
-            {
-                array_view<const uint8_t> view{ arrBuf.data(), arrBuf.data() + bytesRead };
-                dw.WriteBytes(view);
-            }
-            status = mz_zip_reader_extract_iter_free(pState);
-            assert(status);
-
-            co_await dw.StoreAsync();
-            co_await dw.FlushAsync();
-
-            dw.Close();
-            os.Close();
-            stream.Close();
-        }
-    }
-
-    status = mz_zip_reader_end(&zip_archive);
-    assert(status);
-}
-
 /*
  * This is native-side of the RemotePackage.download method
  */
 fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<IJsonValue> promise) noexcept
 {
     auto mutableUpdatePackage{ updatePackage };
-    auto binary{ co_await GetBinaryAsync() };
+    //auto binary{ co_await GetBinaryAsync() };
     /*
     path binaryBundlePath{ GetBinaryBundlePath() };
     if (!binaryBundlePath.empty())
@@ -331,12 +278,12 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
     }
 
     //auto publicKey{ CodePushConfig::Current().GetPublicKey() };
-    auto publicKey{ m_codePushConfig.GetPublicKey() };
+    //auto publicKey{ m_codePushConfig.GetPublicKey() };
 
     co_await CodePushPackage::DownloadPackageAsync(
         mutableUpdatePackage, 
-        (co_await GetBundleFileAsync()).Path(), 
-        publicKey,
+        /* m_host.InstanceSettings().JavaScriptBundleFile() */ L"index.windows.bundle",
+        /* publicKey */ L"",
         /* progressCallback */ [=](int64_t expectedContentLength, int64_t receivedContentLength) {
             // Update the download progress so that the frame observer can notify the JS side
             m_latestExpectedContentLength = expectedContentLength;
@@ -496,6 +443,7 @@ fire_and_forget CodePushNativeModule::GetUpdateMetadataAsync(CodePushUpdateState
         // so we simply return nil regardless if the user
         // wanted to retrieve the pending or running update.
         promise.Resolve(JsonValue::CreateNullValue());
+        co_return;
     }
 
     // We have a CodePush update, so let's see if it's currently in a pending state.
@@ -586,7 +534,21 @@ fire_and_forget CodePushNativeModule::InstallUpdateAsync(JsonObject updatePackag
  * This method isn't publicly exposed via the "react-native-code-push"
  * module, and is only used internally to populate the RemotePackage.failedInstall property.
  */
-void CodePushNativeModule::IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept {}
+void CodePushNativeModule::IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept 
+{
+    auto isFailedHash{ IsFailedHash(packageHash) };
+    promise.Resolve(isFailedHash);
+}
+
+/*
+RCT_EXPORT_METHOD(isFailedUpdate:(NSString *)packageHash
+                         resolve:(RCTPromiseResolveBlock)resolve
+                          reject:(RCTPromiseRejectBlock)reject)
+{
+    BOOL isFailedHash = [[self class] isFailedHash:packageHash];
+    resolve(@(isFailedHash));
+}
+*/
 
 void CodePushNativeModule::SetLatestRollbackInfo(wstring packageHash) noexcept {}
 

@@ -28,7 +28,7 @@ namespace CodePush
 	using namespace std;
 	using namespace filesystem;
 
-	REACT_MODULE(CodePushNativeModule);
+	REACT_MODULE(CodePushNativeModule, L"CodePush");
 	struct CodePushNativeModule
 	{
 		enum class CodePushInstallMode;
@@ -184,7 +184,7 @@ namespace CodePush
          * This method isn't publicly exposed via the "react-native-code-push"
          * module, and is only used internally to populate the RemotePackage.failedInstall property.
          */
-		REACT_METHOD(IsFirstRun, L"isFirstRun");
+		REACT_METHOD(IsFailedUpdate, L"isFailedUpdate");
 		void IsFailedUpdate(wstring packageHash, ReactPromise<bool> promise) noexcept;
 
 		REACT_METHOD(SetLatestRollbackInfo, L"setLatestRollbackInfo");
