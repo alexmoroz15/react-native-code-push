@@ -30,6 +30,12 @@
     <ClCompile Include="CodePushNativeModule.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
+    <ClCompile Include="CodePushDownloadHandler.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
+    <ClCompile Include="FileUtils.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -58,6 +64,9 @@
       <Filter>CodePush</Filter>
     </ClInclude>
     <ClInclude Include="CodePushNativeModule.h">
+      <Filter>CodePush</Filter>
+    </ClInclude>
+    <ClInclude Include="FileUtils.h">
       <Filter>CodePush</Filter>
     </ClInclude>
   </ItemGroup>

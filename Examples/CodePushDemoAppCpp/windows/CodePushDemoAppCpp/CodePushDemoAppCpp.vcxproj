@@ -112,6 +112,7 @@
     <ClInclude Include="CodePushTelemetryManager.h" />
     <ClInclude Include="CodePushUpdateUtils.h" />
     <ClInclude Include="CodePushUtils.h" />
+    <ClInclude Include="FileUtils.h" />
     <ClInclude Include="MainPage.h">
       <DependentUpon>MainPage.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -144,11 +145,13 @@
     <Image Include="Assets\Wide310x150Logo.scale-200.png" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CodePushDownloadHandler.cpp" />
     <ClCompile Include="CodePushNativeModule.cpp" />
     <ClCompile Include="CodePushConfig.cpp" />
     <ClCompile Include="CodePushPackage.cpp" />
     <ClCompile Include="CodePushUpdateUtils.cpp" />
     <ClCompile Include="CodePushUtils.cpp" />
+    <ClCompile Include="FileUtils.cpp" />
     <ClCompile Include="MainPage.cpp">
       <DependentUpon>MainPage.xaml</DependentUpon>
       <SubType>Code</SubType>
