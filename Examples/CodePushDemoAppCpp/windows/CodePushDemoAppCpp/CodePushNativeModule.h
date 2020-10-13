@@ -129,6 +129,7 @@ namespace CodePush
 		static path GetBundlePath();
 
 		// Not sure exactly why these methods exist
+		static StorageFolder GetLocalStorageFolder();
 		static path GetLocalStoragePath();
 		path GetBundleAssetsPath();
 		

@@ -42,6 +42,7 @@ IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryAsync()
 { 
     //return nullptr;
     Uri binaryUri{ L"ms-appx:///" };
+    //auto bla{ Windows::ApplicationModel::Package::Current().InstalledPath() };
     auto binaryFolder{ co_await StorageFolder::GetFolderFromPathAsync(binaryUri.Path()) };
     auto binaryFolderFiles{ co_await binaryFolder.GetFilesAsync() };
     for (const auto& file : binaryFolderFiles)
@@ -66,9 +67,14 @@ IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync()
 //path CodePushNativeModule::GetBundlePath() { return nullptr; }
 
 // Rather than store files in the library files, CodePush for ReactNativeWindows will use AppData folders.
+StorageFolder CodePushNativeModule::GetLocalStorageFolder()
+{
+    return ApplicationData::Current().LocalFolder();
+}
+
 path CodePushNativeModule::GetLocalStoragePath()
 {
-    return wstring_view(ApplicationData::Current().LocalFolder().Path());
+    return wstring_view(GetLocalStorageFolder().Path());
 }
 
 void CodePushNativeModule::OverrideAppVersion(wstring_view appVersion) {}
@@ -237,6 +243,8 @@ void CodePushNativeModule::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
 
+    //auto bla{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
+
     auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
     m_host = res.as<ReactNativeHost>();
 
@@ -299,8 +307,15 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
             }
         },
         /* doneCallback */ [=] {
-            auto newPackage{ CodePushPackage::GetPackageAsync(mutableUpdatePackage.GetNamedString(PackageHashKey)).GetResults() };
-            promise.Resolve(newPackage);
+            auto newPackage{ CodePushPackage::GetPackageAsync(mutableUpdatePackage.GetNamedString(PackageHashKey)).get() };
+            if (newPackage == nullptr)
+            {
+                promise.Resolve(JsonValue::CreateNullValue());
+            }
+            else
+            {
+                promise.Resolve(newPackage);
+            }
         },
         /* failCallback */ [=](const hresult_error& ex) {
             // If the error is a codepush error...
