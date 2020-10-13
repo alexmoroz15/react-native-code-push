@@ -10,6 +10,7 @@
 #include <stack>
 #include <filesystem>
 
+#include "CodePushNativeModule.h"
 #include "FileUtils.h"
 
 using namespace CodePush;
@@ -21,6 +22,39 @@ using namespace Windows::Storage::Streams;
 
 using namespace std;
 using namespace filesystem;
+
+/*
+IStorageItem GetItemAtPath(const path& itemPath)
+{
+    if (itemPath.wstring().find(CodePushNativeModule::GetLocalStoragePath().wstring()) != wstring::npos)
+    {
+        auto rootFolder{ CodePushNativeModule::GetLocalStorageFolder() };
+        auto 
+    }
+
+    return nullptr;
+}
+*/
+
+IAsyncOperation<StorageFile> FileUtils::GetOrCreateFileAsync(StorageFolder rootFolder, wstring_view newFileName)
+{
+    auto item{ (co_await rootFolder.TryGetItemAsync(newFileName)).try_as<StorageFile>() };
+    if (item == nullptr)
+    {
+        co_return co_await rootFolder.CreateFileAsync(newFileName);
+    }
+    co_return item;
+}
+
+IAsyncOperation<StorageFolder> FileUtils::GetOrCreateFolderAsync(StorageFolder rootFolder, wstring_view newFolderName)
+{
+    auto item{ (co_await rootFolder.TryGetItemAsync(newFolderName)).try_as<StorageFolder>() };
+    if (item == nullptr)
+    {
+        co_return co_await rootFolder.CreateFolderAsync(newFolderName);
+    }
+    co_return item;
+}
 
 IAsyncOperation<StorageFile> FileUtils::CreateFileFromPathAsync(StorageFolder rootFolder, const path& relativePath)
 {
