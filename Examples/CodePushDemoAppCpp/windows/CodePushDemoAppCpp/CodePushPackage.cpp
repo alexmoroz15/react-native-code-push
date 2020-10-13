@@ -4,6 +4,7 @@
 #include "CodePushNativeModule.h"
 #include "CodePushPackage.h"
 //#include "JSValueAdditions.h"
+#include "FileUtils.h"
 
 //#include "NativeModules.h"
 #include <winrt/Windows.Storage.h>
@@ -11,6 +12,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <stack>
 
 using namespace CodePush;
 
@@ -28,11 +30,14 @@ using namespace std;
 //const wstring UpdateBundleFileName{ L"app.jsbundle" };
 //const wstring UnzippedFolderName{ L"unzipped" };
 
+StorageFolder GetCodePushFolder();
 path GetCodePushPath();
 IAsyncOperation<JsonObject> GetCurrentPackageInfoAsync();
 path GetDownloadFilePath();
 IAsyncOperation<hstring> GetPreviousPackageHashAsync();
+StorageFile GetStatusFile();
 path GetStatusFilePath();
+StorageFolder GetUnzippedFolder();
 path GetUnzippedFolderPath();
 
 IAsyncAction CodePushPackage::DownloadPackageAsync(
@@ -47,34 +52,55 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
     auto newUpdateFolderPath{ GetPackageFolderPath(newUpdateHash) };
     auto newUpdateMetadataPath{ newUpdateFolderPath / UpdateMetadataFileName };
 
+    // DeleteIfExists(newUpdateFolder());
+    // if (!FolderExists(CodePushPath()))
+    // {
+    // CreateFolderFromPath(CodePushPath());
+    // }
+
     // There is no function to check if a folder exists.
-    /*
     try
     {
         auto newUpdateFolder{ co_await StorageFolder::GetFolderFromPathAsync(newUpdateFolderPath.wstring()) };
         co_await newUpdateFolder.DeleteAsync();
     }
     catch (...) {}
-    */
 
-    /*
+    auto codePushFolderExists{ false };
     try
     {
         auto codePushFolder{ co_await StorageFolder::GetFolderFromPathAsync(GetCodePushPath().wstring()) };
+        codePushFolderExists = true;
     }
-    catch (...)
+    catch (...) {}
+    if (!codePushFolderExists)
     {
         auto codePushPath{ GetCodePushPath() };
-        auto parentFolder{ co_await StorageFolder::GetFolderFromPathAsync(codePushPath.parent_path().wstring()) };
-        co_await parentFolder.CreateFolderAsync(codePushPath.stem().wstring());
-    }
-    */
+        auto localStoragePath{ CodePushNativeModule::GetLocalStoragePath() };
+        path relativePath{ codePushPath.wstring().substr(localStoragePath.wstring().size()) };
+        stack<path> folderStack{};
+        while (relativePath.has_parent_path())
+        {
+            folderStack.push(relativePath.stem());
+            relativePath = relativePath.parent_path();
+        }
 
-    // DeleteIfExists(newUpdateFolder());
-    // if (!FolderExists(CodePushPath()))
-    // {
-    // CreateFolderFromPath(CodePushPath());
-    // }
+        auto rootFolder{ CodePushNativeModule::GetLocalStorageFolder() };
+        while (!folderStack.empty())
+        {
+            auto folderName{ folderStack.top().wstring() };
+            auto folder{ (co_await rootFolder.TryGetItemAsync(folderName)).try_as<StorageFolder>() };
+            if (folder == nullptr)
+            {
+                rootFolder = co_await rootFolder.CreateFolderAsync(folderName);
+            }
+            else
+            {
+                rootFolder = folder;
+            }
+            folderStack.pop();
+        }
+    }
 
     auto downloadFilePath{ GetDownloadFilePath() };
     auto bundleFilePath{ newUpdateFolderPath / UpdateBundleFileName };
@@ -112,6 +138,27 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                 co_await downloadFile.MoveAsync(bundleFilePath.parent_path().wstring());
                 co_await downloadFile.RenameAsync(bundleFilePath.filename());
                 */
+                try
+                {
+                    auto downloadFile{ StorageFile::GetFileFromPathAsync(downloadFilePath.wstring()) };
+                    StorageFolder newUpdateFolder{ nullptr };
+                    try
+                    {
+                        newUpdateFolder = StorageFolder::GetFolderFromPathAsync(newUpdateFolderPath.wstring()).get();
+                    }
+                    catch(const hresult_error& ex)
+                    {
+                        if (ex.code() == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+                        {
+                            //newUpdateFolder = 
+                        }
+                    }
+                }
+                catch(const hresult_error& ex)
+                {
+                    failCallback(ex);
+                    return;
+                }
             }
 
             /*
@@ -678,6 +725,18 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
     [downloadHandler download:updatePackage[@"downloadUrl"]];
 }
 */
+
+StorageFolder GetCodePushFolder()
+{
+    /*
+    auto localStorage{ CodePushNativeModule::GetLocalStorageFolder() };
+    if (false)
+    {
+        localStorage = FileUtils::GetOrCreateFolderAsync(localStorage, L"TestPackages").get();
+    }
+    return FileUtils::GetOrCreateFolderAsync(localStorage, L"CodePush").get();
+    */
+}
 
 path GetCodePushPath()
 {
