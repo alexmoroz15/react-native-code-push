@@ -36,6 +36,94 @@ IStorageItem GetItemAtPath(const path& itemPath)
 }
 */
 
+IAsyncOperation<StorageFile> FileUtils::GetFileAtPathAsync(StorageFolder rootFolder, path relPath)
+{
+    stack<wstring> pathParts;
+    while (relPath.has_parent_path())
+    {
+        pathParts.push(relPath.stem());
+        relPath = relPath.parent_path();
+    }
+
+    while (pathParts.size() > 2)
+    {
+        auto folder{ (co_await rootFolder.TryGetItemAsync(pathParts.top())).try_as<StorageFolder>() };
+        if (folder == nullptr)
+        {
+            return nullptr;
+        }
+        rootFolder = folder;
+        pathParts.pop();
+    }
+
+    auto file{ (co_await rootFolder.TryGetItemAsync(pathParts.top())).try_as<StorageFile>() };
+    if (file == nullptr)
+    {
+        co_return nullptr;
+    }
+    co_return file;
+}
+
+// Returns the folder at the specified path relative to the rootfolder
+IAsyncOperation<StorageFolder> FileUtils::GetFolderAtPathAsync(StorageFolder rootFolder, path relPath)
+{
+    stack<wstring> pathParts;
+    while (relPath.has_parent_path())
+    {
+        pathParts.push(relPath.stem());
+        relPath = relPath.parent_path();
+    }
+
+    while (!pathParts.empty())
+    {
+        auto folder{ (co_await rootFolder.TryGetItemAsync(pathParts.top())).try_as<StorageFolder>() };
+        if (folder == nullptr)
+        {
+            co_return nullptr;
+        }
+        rootFolder = folder;
+        pathParts.pop();
+    }
+
+    co_return rootFolder;
+}
+
+IAsyncOperation<StorageFile> FileUtils::GetOrCreateFileAtPathAsync(StorageFolder rootFolder, path relPath)
+{
+    stack<wstring> pathParts;
+    while (relPath.has_parent_path())
+    {
+        pathParts.push(relPath.stem());
+        relPath = relPath.parent_path();
+    }
+
+    while (pathParts.size() > 2)
+    {
+        rootFolder = co_await GetOrCreateFolderAsync(rootFolder, pathParts.top());
+        pathParts.pop();
+    }
+
+    co_return co_await GetOrCreateFileAsync(rootFolder, pathParts.top());
+}
+
+IAsyncOperation<StorageFolder> FileUtils::GetOrCreateFolderAtPathAsync(StorageFolder rootFolder, path relPath)
+{
+    stack<wstring> pathParts;
+    while (relPath.has_parent_path())
+    {
+        pathParts.push(relPath.stem());
+        relPath = relPath.parent_path();
+    }
+
+    while (!pathParts.empty())
+    {
+        rootFolder = co_await GetOrCreateFolderAsync(rootFolder, pathParts.top());
+        pathParts.pop();
+    }
+
+    co_return rootFolder;
+}
+
 IAsyncOperation<StorageFile> FileUtils::GetOrCreateFileAsync(StorageFolder rootFolder, wstring_view newFileName)
 {
     auto item{ (co_await rootFolder.TryGetItemAsync(newFileName)).try_as<StorageFile>() };
@@ -96,7 +184,7 @@ IAsyncOperation<hstring> FileUtils::FindFilePathAsync(const StorageFolder& rootF
     {
         auto relRootFolder = candidateFolders.top();
         candidateFolders.pop();
-
+        
         auto files{ co_await relRootFolder.GetFilesAsync() };
         for (const auto& file : files)
         {

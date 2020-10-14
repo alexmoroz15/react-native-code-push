@@ -23,12 +23,17 @@ namespace CodePush
 		IStorageItem GetItemAtPath(const path& itemPath);
 		StorageFile GetFileAtPath(const path& filePath);
 
-		IAsyncOperation<StorageFile> GetOrCreateFileAsync(StorageFolder rootFolder, wstring_view newFileName);
-		IAsyncOperation<StorageFolder> GetOrCreateFolderAsync(StorageFolder rootFolder, wstring_view newFolderName);
-		IAsyncOperation<StorageFolder> GetFolderAtPath(StorageFolder rootFolder, const path& relPath);
+		static IAsyncOperation<StorageFile> GetFileAtPathAsync(StorageFolder rootFolder, path relPath);
+		static IAsyncOperation<StorageFolder> GetFolderAtPathAsync(StorageFolder rootFolder, path relPath);
 
-		IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder rootFolder, const path& relativePath);
-		IAsyncOperation<hstring> FindFilePathAsync(const StorageFolder& rootFolder, wstring_view fileName);
-		IAsyncAction UnzipAsync(const StorageFile& zipFile, const StorageFolder& destination);
+		static IAsyncOperation<StorageFile> GetOrCreateFileAtPathAsync(StorageFolder rootFolder, path relPath);
+		static IAsyncOperation<StorageFolder> GetOrCreateFolderAtPathAsync(StorageFolder rootFolder, path relPath);
+
+		static IAsyncOperation<StorageFile> GetOrCreateFileAsync(StorageFolder rootFolder, wstring_view newFileName);
+		static IAsyncOperation<StorageFolder> GetOrCreateFolderAsync(StorageFolder rootFolder, wstring_view newFolderName);
+
+		static IAsyncOperation<StorageFile> CreateFileFromPathAsync(StorageFolder rootFolder, const path& relativePath);
+		static IAsyncOperation<hstring> FindFilePathAsync(const StorageFolder& rootFolder, wstring_view fileName);
+		static IAsyncAction UnzipAsync(const StorageFile& zipFile, const StorageFolder& destination);
 	};
 }
