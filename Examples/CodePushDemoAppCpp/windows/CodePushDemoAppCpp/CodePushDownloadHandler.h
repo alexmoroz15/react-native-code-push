@@ -49,22 +49,17 @@ namespace CodePush
 		inline static const uint32_t BufferSize{ 8 * 1024 };
 
 	public:
-		// OutputStream
-		IOutputStream outputStream;
+		StorageFile downloadFile;
 		int64_t expectedContentLength;
 		int64_t receivedContentLength;
-		// Dispatch queue
 		function<void(int64_t, int64_t)> progressCallback;
-		function<void(bool)> doneCallback;
-		function<void(const hresult_error&)> failCallback;
 		wstring downloadUrl;
 
 		CodePushDownloadHandler(
 			StorageFile downloadFile,
-			function<void(int64_t, int64_t)> progressCallback,
-			function<void(bool)> doneCallback,
-			function<void(const hresult_error&)> failCallback);
+			function<void(int64_t, int64_t)> progressCallback);
 
-		IAsyncAction Download(wstring_view url);
+		// Returns true if the downloaded file is a zip file
+		IAsyncOperation<bool> Download(wstring_view url);
 	};
 }

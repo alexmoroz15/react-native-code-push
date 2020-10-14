@@ -65,9 +65,7 @@ namespace CodePush
 			JsonObject updatePackage,
 			wstring_view expectedBundleFileName,
 			wstring_view publicKey,
-			function<void(int64_t, int64_t)> progressCallback,
-			function<void()> doneCallback,
-			function<void(const hresult_error&)> failCallback);
+			function<void(int64_t, int64_t)> progressCallback);
 
 		static IAsyncOperation<JsonObject> GetCurrentPackageAsync();
 		static IAsyncOperation<JsonObject> GetPreviousPackageAsync();
