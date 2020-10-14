@@ -239,6 +239,22 @@ void CodePushNativeModule::SaveFailedUpdate(JsonObject& failedPackage)
     localSettings.Values().Insert(FailedUpdatesKey, failedUpdates);
 }
 
+/*
+ * When an update is installed whose mode isn't IMMEDIATE, this method
+ * can be called to store the pending update's metadata (e.g. packageHash)
+ * so that it can be used when the actual update application occurs at a later point.
+ */
+void CodePushNativeModule::SavePendingUpdate(wstring_view packageHash, bool isLoading)
+{
+    // Since we're not restarting, we need to store the fact that the update
+    // was installed, but hasn't yet become "active".
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    JsonObject pendingUpdate{};
+    pendingUpdate.Insert(PendingUpdateHashKey, JsonValue::CreateStringValue(packageHash));
+    pendingUpdate.Insert(PendingUpdateIsLoadingKey, JsonValue::CreateBooleanValue(isLoading));
+    localSettings.Values().Insert(PendingUpdateKey, pendingUpdate);
+}
+
 void CodePushNativeModule::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
@@ -287,46 +303,48 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
 
     //auto publicKey{ CodePushConfig::Current().GetPublicKey() };
     //auto publicKey{ m_codePushConfig.GetPublicKey() };
+    try
+    {
+        co_await CodePushPackage::DownloadPackageAsync(
+            mutableUpdatePackage,
+            /* m_host.InstanceSettings().JavaScriptBundleFile() */ L"index.windows.bundle",
+            /* publicKey */ L"",
+            /* progressCallback */ [=](int64_t expectedContentLength, int64_t receivedContentLength) {
+                // Update the download progress so that the frame observer can notify the JS side
+                m_latestExpectedContentLength = expectedContentLength;
+                m_latestReceivedContentLength = receivedContentLength;
+                m_didUpdateProgress = true;
 
-    co_await CodePushPackage::DownloadPackageAsync(
-        mutableUpdatePackage, 
-        /* m_host.InstanceSettings().JavaScriptBundleFile() */ L"index.windows.bundle",
-        /* publicKey */ L"",
-        /* progressCallback */ [=](int64_t expectedContentLength, int64_t receivedContentLength) {
-            // Update the download progress so that the frame observer can notify the JS side
-            m_latestExpectedContentLength = expectedContentLength;
-            m_latestReceivedContentLength = receivedContentLength;
-            m_didUpdateProgress = true;
+                // If the download is completed, stop observing frame
+                // updates and synchronously send the last event.
+                if (expectedContentLength == receivedContentLength) {
+                    m_didUpdateProgress = false;
+                    //paused = true;
+                    DispatchDownloadProgressEvent();
+                }
+            });
+    }
+    catch (const hresult_error& ex)
+    {
+        // If the error is a codepush error...
+        auto updatePackage = mutableUpdatePackage;
+        SaveFailedUpdate(updatePackage);
 
-            // If the download is completed, stop observing frame
-            // updates and synchronously send the last event.
-            if (expectedContentLength == receivedContentLength) {
-                m_didUpdateProgress = false;
-                //paused = true;
-                DispatchDownloadProgressEvent();
-            }
-        },
-        /* doneCallback */ [=] {
-            auto newPackage{ CodePushPackage::GetPackageAsync(mutableUpdatePackage.GetNamedString(PackageHashKey)).get() };
-            if (newPackage == nullptr)
-            {
-                promise.Resolve(JsonValue::CreateNullValue());
-            }
-            else
-            {
-                promise.Resolve(newPackage);
-            }
-        },
-        /* failCallback */ [=](const hresult_error& ex) {
-            // If the error is a codepush error...
-            auto updatePackage = mutableUpdatePackage;
-            SaveFailedUpdate(updatePackage);
-            
-            // Stop observing frame updates if the download fails.
-            m_didUpdateProgress = false;
-            //paused = true;
-            promise.Reject(ex.message().c_str());
-        });
+        // Stop observing frame updates if the download fails.
+        m_didUpdateProgress = false;
+        //paused = true;
+        promise.Reject(ex.message().c_str());
+    }
+
+    auto newPackage{ co_await CodePushPackage::GetPackageAsync(mutableUpdatePackage.GetNamedString(PackageHashKey)) };
+    if (newPackage == nullptr)
+    {
+        promise.Resolve(JsonValue::CreateNullValue());
+    }
+    else
+    {
+        promise.Resolve(newPackage);
+    }
 
     co_return;
 }
@@ -543,7 +561,48 @@ RCT_EXPORT_METHOD(getUpdateMetadata:(CodePushUpdateState)updateState
 /*
  * This method is the native side of the LocalPackage.install method.
  */
-fire_and_forget CodePushNativeModule::InstallUpdateAsync(JsonObject updatePackage, CodePushInstallMode installMode, int minimumBackgroundDuration, ReactPromise<void> promise) noexcept { co_return; }
+fire_and_forget CodePushNativeModule::InstallUpdateAsync(JsonObject updatePackage, CodePushInstallMode installMode, int minimumBackgroundDuration, ReactPromise<void> promise) noexcept 
+{ 
+    try
+    {
+        co_await CodePushPackage::InstallPackageAsync(updatePackage, IsPendingUpdate(L""));
+    }
+    catch (const hresult_error& ex)
+    {
+        promise.Reject(ex.message().c_str());
+        co_return;
+    }
+    SavePendingUpdate(updatePackage.GetNamedString(PackageHashKey), false);
+    m_installMode = installMode;
+    if (m_installMode == CodePushInstallMode::ON_NEXT_RESUME || m_installMode == CodePushInstallMode::ON_NEXT_SUSPEND) {
+        m_minimumBackgroundDuration = minimumBackgroundDuration;
+
+        if (!m_hasResumeListener) {
+            // Ensure we do not add the listener twice.
+            // Register for app resume notifications so that we
+            // can check for pending updates which support "restart on resume"
+            
+            // Need to find a way to do this.
+            /*
+            [[NSNotificationCenter defaultCenter]addObserver:self
+                selector : @selector(applicationWillEnterForeground)
+                name:UIApplicationWillEnterForegroundNotification
+                object : RCTSharedApplication()];
+
+            [[NSNotificationCenter defaultCenter]addObserver:self
+                selector : @selector(applicationWillResignActive)
+                name:UIApplicationWillResignActiveNotification
+                object : RCTSharedApplication()];
+            */
+
+            m_hasResumeListener = true;
+        }
+    }
+
+    // Signal to JS that the update has been applied.
+    promise.Resolve();
+    co_return; 
+}
 
 /*
  * This method isn't publicly exposed via the "react-native-code-push"

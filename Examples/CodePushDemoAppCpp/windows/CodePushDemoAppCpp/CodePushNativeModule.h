@@ -38,7 +38,7 @@ namespace CodePush
 		bool m_isFirstRunAfterUpdate;
 		int m_minimumBackgroundDuration;
 		DateTime m_lastResignedDate;
-		CodePushInstallMode _installMode;
+		CodePushInstallMode m_installMode;
 		// Don't know what to replace this with.
 		//NSTimer* _appSuspendTimer;
 		
@@ -107,6 +107,7 @@ namespace CodePush
 		void RemovePendingUpdate();
 		void RestartAppInternal(bool onlyIfUpdateIsPending);
 		void SaveFailedUpdate(JsonObject& failedPackage);
+		void SavePendingUpdate(wstring_view packageHash, bool isLoading);
 
 	public:
 		enum class CodePushInstallMode
