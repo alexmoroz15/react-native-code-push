@@ -2,6 +2,7 @@
 
 #include "winrt/Windows.Storage.h"
 #include "winrt/Windows.Storage.Streams.h"
+#include "winrt/Windows.Foundation.h"
 #include "winrt/Windows.Data.Json.h"
 #include <string>
 #include <filesystem>
@@ -37,6 +38,7 @@ namespace CodePush
 	using namespace winrt;
 	using namespace Windows::Storage;
 	using namespace Windows::Storage::Streams;
+	using namespace Windows::Foundation;
 
 	using namespace std;
 	using namespace filesystem;
@@ -44,9 +46,11 @@ namespace CodePush
 	struct CodePushDownloadHandler
 	{
 	private:
+		inline static const uint32_t BufferSize{ 8 * 1024 };
 
 	public:
 		// OutputStream
+		IOutputStream outputStream;
 		int64_t expectedContentLength;
 		int64_t receivedContentLength;
 		// Dispatch queue
@@ -56,11 +60,11 @@ namespace CodePush
 		wstring downloadUrl;
 
 		CodePushDownloadHandler(
-			path downloadFilePath,
+			StorageFile downloadFile,
 			function<void(int64_t, int64_t)> progressCallback,
 			function<void(bool)> doneCallback,
 			function<void(const hresult_error&)> failCallback);
 
-		void Download(wstring_view url);
+		IAsyncAction Download(wstring_view url);
 	};
 }
