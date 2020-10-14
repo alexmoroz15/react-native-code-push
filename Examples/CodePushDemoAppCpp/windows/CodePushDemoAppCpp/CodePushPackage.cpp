@@ -3,6 +3,7 @@
 #include "CodePushDownloadHandler.h"
 #include "CodePushNativeModule.h"
 #include "CodePushPackage.h"
+#include "CodePushUtils.h"
 //#include "JSValueAdditions.h"
 #include "FileUtils.h"
 
@@ -48,156 +49,51 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
 	function<void()> doneCallback,
 	function<void(const hresult_error&)> failCallback)
 {
+    // Major rewrite needed! All this runs on UI thread! Do not call async funcs synchronously!
+    // We can keep the progressCallback and failCallback, but the doneCallback should be appended to the end of this method.
+
     auto newUpdateHash{ updatePackage.GetNamedString(L"packageHash") };
-    auto newUpdateFolderPath{ GetPackageFolderPath(newUpdateHash) };
-    auto newUpdateMetadataPath{ newUpdateFolderPath / UpdateMetadataFileName };
+    auto codePushFolder{ GetCodePushFolder() };
+    //auto newUpdateFolder{ co_await codePushFolder.CreateFolderAsync(newUpdateHash, CreationCollisionOption::ReplaceExisting) };
+    //auto newUpdateMetadataFile{ co_await newUpdateFolder.CreateFileAsync(UpdateMetadataFileName, CreationCollisionOption::ReplaceExisting) };
 
-    // DeleteIfExists(newUpdateFolder());
-    // if (!FolderExists(CodePushPath()))
-    // {
-    // CreateFolderFromPath(CodePushPath());
-    // }
-
-    // There is no function to check if a folder exists.
-    try
-    {
-        auto newUpdateFolder{ co_await StorageFolder::GetFolderFromPathAsync(newUpdateFolderPath.wstring()) };
-        co_await newUpdateFolder.DeleteAsync();
-    }
-    catch (...) {}
-
-    auto codePushFolderExists{ false };
-    try
-    {
-        auto codePushFolder{ co_await StorageFolder::GetFolderFromPathAsync(GetCodePushPath().wstring()) };
-        codePushFolderExists = true;
-    }
-    catch (...) {}
-    if (!codePushFolderExists)
-    {
-        auto codePushPath{ GetCodePushPath() };
-        auto localStoragePath{ CodePushNativeModule::GetLocalStoragePath() };
-        path relativePath{ codePushPath.wstring().substr(localStoragePath.wstring().size()) };
-        stack<path> folderStack{};
-        while (relativePath.has_parent_path())
-        {
-            folderStack.push(relativePath.stem());
-            relativePath = relativePath.parent_path();
-        }
-
-        auto rootFolder{ CodePushNativeModule::GetLocalStorageFolder() };
-        while (!folderStack.empty())
-        {
-            auto folderName{ folderStack.top().wstring() };
-            auto folder{ (co_await rootFolder.TryGetItemAsync(folderName)).try_as<StorageFolder>() };
-            if (folder == nullptr)
-            {
-                rootFolder = co_await rootFolder.CreateFolderAsync(folderName);
-            }
-            else
-            {
-                rootFolder = folder;
-            }
-            folderStack.pop();
-        }
-    }
-
-    auto downloadFilePath{ GetDownloadFilePath() };
-    auto bundleFilePath{ newUpdateFolderPath / UpdateBundleFileName };
+    //auto downloadFilePath{ GetDownloadFilePath() };
+    //auto bundleFilePath{ path(newUpdateFolder.Path().c_str()) / UpdateBundleFileName };
+    auto downloadFile{ codePushFolder.CreateFileAsync(DownloadFileName, CreationCollisionOption::ReplaceExisting).get() };
 
     CodePushDownloadHandler downloadHandler{
-        downloadFilePath, 
+        downloadFile,
         progressCallback, 
         [=](bool isZip) 
         {
+            StorageFolder newUpdateFolder{ nullptr };
+            StorageFile newUpdateMetadataFile{ nullptr };
             auto unzippedFolderPath{ GetUnzippedFolderPath() };
             auto mutableUpdatePackage{ updatePackage };
             if (isZip)
             {
-                // Delete unzipped folder if exists.
-
-            }
-            else
-            {
-                /*
-                [[NSFileManager defaultManager] createDirectoryAtPath:newUpdateFolderPath
-                                            withIntermediateDirectories:YES
-                                                            attributes:nil
-                                                                error:&error];
-                [[NSFileManager defaultManager] moveItemAtPath:downloadFilePath
-                                                        toPath:bundleFilePath
-                                                            error:&error];
-                if (error) {
-                    failCallback(error);
-                    return;
-                }
-                */
-                // CreateFolderAtPath(newUpdateFolderPath);
-                /*
-                auto downloadFile{ co_await StorageFile::GetFileFromPathAsync(downloadFilePath.wstring()) };
-                co_await downloadFile.MoveAsync(bundleFilePath.parent_path().wstring());
-                co_await downloadFile.RenameAsync(bundleFilePath.filename());
-                */
-                try
+                auto unzippedFolder{ codePushFolder.CreateFolderAsync(UnzippedFolderName, CreationCollisionOption::ReplaceExisting).get() };
+                auto downloadFile{ codePushFolder.GetFileAsync(DownloadFileName).get() };
+                FileUtils::UnzipAsync(downloadFile, unzippedFolder).get();
+                downloadFile.DeleteAsync();
+                
+                auto isDiffUpdate{ false };
+                auto diffManifestFile{ unzippedFolder.GetItemAsync(DiffManifestFileName).get().try_as<StorageFile>() };
+                if (diffManifestFile != nullptr)
                 {
-                    auto downloadFile{ StorageFile::GetFileFromPathAsync(downloadFilePath.wstring()) };
-                    StorageFolder newUpdateFolder{ nullptr };
-                    try
-                    {
-                        newUpdateFolder = StorageFolder::GetFolderFromPathAsync(newUpdateFolderPath.wstring()).get();
-                    }
-                    catch(const hresult_error& ex)
-                    {
-                        if (ex.code() == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
-                        {
-                            //newUpdateFolder = 
-                        }
-                    }
+                    isDiffUpdate = true;
                 }
-                catch(const hresult_error& ex)
+
+                if (isDiffUpdate)
                 {
-                    failCallback(ex);
-                    return;
-                }
-            }
-
-            /*
-            NSError *error = nil;
-            NSString * unzippedFolderPath = [CodePushPackage getUnzippedFolderPath];
-            NSMutableDictionary * mutableUpdatePackage = [updatePackage mutableCopy];
-            if (isZip) {
-                if ([[NSFileManager defaultManager] fileExistsAtPath:unzippedFolderPath]) {
-                    // This removes any unzipped download data that could have been left
-                    // uncleared due to a crash or error during the download process.
-                    [[NSFileManager defaultManager] removeItemAtPath:unzippedFolderPath
-                                                                error:&error];
-                    if (error) {
-                        failCallback(error);
-                        return;
-                    }
-                }
-
-                NSError *nonFailingError = nil;
-                [SSZipArchive unzipFileAtPath:downloadFilePath
-                                toDestination:unzippedFolderPath];
-                [[NSFileManager defaultManager] removeItemAtPath:downloadFilePath
-                                                            error:&nonFailingError];
-                if (nonFailingError) {
-                    CPLog(@"Error deleting downloaded file: %@", nonFailingError);
-                    nonFailingError = nil;
-                }
-
-                NSString *diffManifestFilePath = [unzippedFolderPath stringByAppendingPathComponent:DiffManifestFileName];
-                BOOL isDiffUpdate = [[NSFileManager defaultManager] fileExistsAtPath:diffManifestFilePath];
-
-                if (isDiffUpdate) {
+                    /*
                     // Copy the current package to the new package.
                     NSString *currentPackageFolderPath = [self getCurrentPackageFolderPath:&error];
                     if (error) {
                         failCallback(error);
                         return;
                     }
-
+                                                            
                     if (currentPackageFolderPath == nil) {
                         // Currently running the binary version, copy files from the bundled resources
                         NSString *newUpdateCodePushPath = [newUpdateFolderPath stringByAppendingPathComponent:[CodePushUpdateUtils manifestFolderPrefix]];
@@ -209,7 +105,7 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                             failCallback(error);
                             return;
                         }
-
+                                                                
                         [[NSFileManager defaultManager] copyItemAtPath:[CodePush bundleAssetsPath]
                                                                 toPath:[newUpdateCodePushPath stringByAppendingPathComponent:[CodePushUpdateUtils assetsFolderName]]
                                                                     error:&error];
@@ -217,7 +113,7 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                             failCallback(error);
                             return;
                         }
-
+                                                                
                         [[NSFileManager defaultManager] copyItemAtPath:[[CodePush binaryBundleURL] path]
                                                                 toPath:[newUpdateCodePushPath stringByAppendingPathComponent:[[CodePush binaryBundleURL] lastPathComponent]]
                                                                     error:&error];
@@ -234,7 +130,7 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                             return;
                         }
                     }
-
+                                                            
                     // Delete files mentioned in the manifest.
                     NSString *manifestContent = [NSString stringWithContentsOfFile:diffManifestFilePath
                                                                             encoding:NSUTF8StringEncoding
@@ -243,7 +139,7 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                         failCallback(error);
                         return;
                     }
-
+                                                            
                     NSData *data = [manifestContent dataUsingEncoding:NSUTF8StringEncoding];
                     NSDictionary *manifestJSON = [NSJSONSerialization JSONObjectWithData:data
                                                                                     options:kNilOptions
@@ -260,50 +156,33 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                             }
                         }
                     }
-
+                                                            
                     [[NSFileManager defaultManager] removeItemAtPath:diffManifestFilePath
                                                                 error:&error];
                     if (error) {
                         failCallback(error);
                         return;
                     }
+                    */
                 }
 
-                [CodePushUpdateUtils copyEntriesInFolder:unzippedFolderPath
-                                                destFolder:newUpdateFolderPath
-                                                    error:&error];
-                if (error) {
-                    failCallback(error);
+                unzippedFolder.RenameAsync(newUpdateHash, NameCollisionOption::ReplaceExisting).get();
+                newUpdateFolder = unzippedFolder;
+
+                auto relativeBundlePath{ FileUtils::FindFilePathAsync(newUpdateFolder, expectedBundleFileName).get() };
+                if (!relativeBundlePath.empty())
+                {
+                    mutableUpdatePackage.Insert(RelativeBundlePathKey, JsonValue::CreateStringValue(relativeBundlePath));
+                }
+                else
+                {
+                    auto errorMessage{ L"" };
+                    failCallback(hresult_error{ HRESULT_FROM_WIN32(E_FAIL), errorMessage });
                     return;
                 }
 
-                [[NSFileManager defaultManager] removeItemAtPath:unzippedFolderPath
-                                                            error:&nonFailingError];
-                if (nonFailingError) {
-                    CPLog(@"Error deleting downloaded file: %@", nonFailingError);
-                    nonFailingError = nil;
-                }
-
-                NSString *relativeBundlePath = [CodePushUpdateUtils findMainBundleInFolder:newUpdateFolderPath
-                                                                            expectedFileName:expectedBundleFileName
-                                                                                        error:&error];
-
-                if (error) {
-                    failCallback(error);
-                    return;
-                }
-
-                if (relativeBundlePath) {
-                    [mutableUpdatePackage setValue:relativeBundlePath forKey:RelativeBundlePathKey];
-                } else {
-                    NSString *errorMessage = [NSString stringWithFormat:@"Update is invalid - A JS bundle file named \"%@\" could not be found within the downloaded contents. Please ensure that your app is syncing with the correct deployment and that you are releasing your CodePush updates using the exact same JS bundle file name that was shipped with your app's binary.", expectedBundleFileName];
-
-                    error = [CodePushErrorUtils errorWithMessage:errorMessage];
-
-                    failCallback(error);
-                    return;
-                }
-
+                // What on earth is this for?
+                /*
                 if ([[NSFileManager defaultManager] fileExistsAtPath:newUpdateMetadataPath]) {
                     [[NSFileManager defaultManager] removeItemAtPath:newUpdateMetadataPath
                                                                 error:&error];
@@ -312,15 +191,20 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                         return;
                     }
                 }
+                */
+                
+                CodePushUtils::Log((isDiffUpdate) ? L"Applying diff update." : L"Applying full update.");
+                auto isSignatureVerificationEnabled{ !publicKey.empty() };
 
-                CPLog((isDiffUpdate) ? @"Applying diff update." : @"Applying full update.");
-
-                BOOL isSignatureVerificationEnabled = (publicKey != nil);
-
+                bool isSignatureAppearedInBundle{ false };
+                /*
                 NSString *signatureFilePath = [CodePushUpdateUtils getSignatureFilePath:newUpdateFolderPath];
                 BOOL isSignatureAppearedInBundle = [[NSFileManager defaultManager] fileExistsAtPath:signatureFilePath];
+                */
 
-                if (isSignatureVerificationEnabled) {
+                if (isSignatureVerificationEnabled)
+                {
+                    /*
                     if (isSignatureAppearedInBundle) {
                         if (![CodePushUpdateUtils verifyFolderHash:newUpdateFolderPath
                                                         expectedHash:newUpdateHash
@@ -358,18 +242,24 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                         failCallback(error);
                         return;
                     }
-
-                } else {
-                    BOOL needToVerifyHash;
-                    if (isSignatureAppearedInBundle) {
-                        CPLog(@"Warning! JWT signature exists in codepush update but code integrity check couldn't be performed" \
-                                " because there is no public key configured. " \
-                                "Please ensure that public key is properly configured within your application.");
+                    */
+                }
+                else
+                {
+                    bool needToVerifyHash;
+                    if (isSignatureAppearedInBundle)
+                    {
+                        CodePushUtils::Log(L"");
                         needToVerifyHash = true;
-                    } else {
+                    }
+                    else
+                    {
                         needToVerifyHash = isDiffUpdate;
                     }
-                    if(needToVerifyHash){
+
+                    if (needToVerifyHash)
+                    {
+                        /*
                         if (![CodePushUpdateUtils verifyFolderHash:newUpdateFolderPath
                                                         expectedHash:newUpdateHash
                                                                 error:&error]) {
@@ -383,38 +273,37 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
                         } else {
                             CPLog(@"The update contents succeeded the data integrity check.");
                         }
+                        */
                     }
                 }
-            } else {
-                [[NSFileManager defaultManager] createDirectoryAtPath:newUpdateFolderPath
-                                            withIntermediateDirectories:YES
-                                                            attributes:nil
-                                                                error:&error];
-                [[NSFileManager defaultManager] moveItemAtPath:downloadFilePath
-                                                        toPath:bundleFilePath
-                                                            error:&error];
-                if (error) {
-                    failCallback(error);
+            }
+            else
+            {
+                try
+                {
+                    newUpdateFolder = codePushFolder.CreateFolderAsync(newUpdateHash, CreationCollisionOption::ReplaceExisting).get();
+                    auto downloadFile{ codePushFolder.GetFileAsync(DownloadFileName).get() };
+                    downloadFile.MoveAsync(newUpdateFolder, UpdateBundleFileName, NameCollisionOption::ReplaceExisting).get();
+                }
+                catch (const hresult_error& ex)
+                {
+                    failCallback(ex);
                     return;
                 }
             }
+            
+            newUpdateMetadataFile = newUpdateFolder.CreateFileAsync(UpdateMetadataFileName, CreationCollisionOption::ReplaceExisting).get();
 
-            NSData *updateSerializedData = [NSJSONSerialization dataWithJSONObject:mutableUpdatePackage
-                                                                            options:0
-                                                                                error:&error];
-            NSString *packageJsonString = [[NSString alloc] initWithData:updateSerializedData
-                                                                encoding:NSUTF8StringEncoding];
-
-            [packageJsonString writeToFile:newUpdateMetadataPath
-                                atomically:YES
-                                    encoding:NSUTF8StringEncoding
-                                        error:&error];
-            if (error) {
-                failCallback(error);
-            } else {
-                doneCallback();
+            try
+            {
+                auto packageJsonString{ mutableUpdatePackage.Stringify() };
+                FileIO::WriteTextAsync(newUpdateMetadataFile, packageJsonString);
             }
-            */
+            catch (const hresult_error& ex)
+            {
+                failCallback(ex);
+            }
+            doneCallback();
         }, 
         failCallback };
 
@@ -423,319 +312,15 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
 	co_return;
 }
 
-/*
-+ (void)downloadPackage:(NSDictionary *)updatePackage
- expectedBundleFileName:(NSString *)expectedBundleFileName
-              publicKey:(NSString *)publicKey
-         operationQueue:(dispatch_queue_t)operationQueue
-       progressCallback:(void (^)(long long, long long))progressCallback
-           doneCallback:(void (^)())doneCallback
-           failCallback:(void (^)(NSError *err))failCallback
-{
-    NSString *newUpdateHash = updatePackage[@"packageHash"];
-    NSString *newUpdateFolderPath = [self getPackageFolderPath:newUpdateHash];
-    NSString *newUpdateMetadataPath = [newUpdateFolderPath stringByAppendingPathComponent:UpdateMetadataFileName];
-    NSError *error;
-
-    if ([[NSFileManager defaultManager] fileExistsAtPath:newUpdateFolderPath]) {
-        // This removes any stale data in newUpdateFolderPath that could have been left
-        // uncleared due to a crash or error during the download or install process.
-        [[NSFileManager defaultManager] removeItemAtPath:newUpdateFolderPath
-                                                   error:&error];
-    } else if (![[NSFileManager defaultManager] fileExistsAtPath:[self getCodePushPath]]) {
-        [[NSFileManager defaultManager] createDirectoryAtPath:[self getCodePushPath]
-                                  withIntermediateDirectories:YES
-                                                   attributes:nil
-                                                        error:&error];
-
-        // Ensure that none of the CodePush updates we store on disk are
-        // ever included in the end users iTunes and/or iCloud backups
-        NSURL *codePushURL = [NSURL fileURLWithPath:[self getCodePushPath]];
-        [codePushURL setResourceValue:@YES forKey:NSURLIsExcludedFromBackupKey error:nil];
-    }
-
-    if (error) {
-        return failCallback(error);
-    }
-
-    NSString *downloadFilePath = [self getDownloadFilePath];
-    NSString *bundleFilePath = [newUpdateFolderPath stringByAppendingPathComponent:UpdateBundleFileName];
-
-    CodePushDownloadHandler *downloadHandler = [[CodePushDownloadHandler alloc]
-                                                init:downloadFilePath
-                                                operationQueue:operationQueue
-                                                progressCallback:progressCallback
-                                                doneCallback:^(BOOL isZip) {
-                                                    NSError *error = nil;
-                                                    NSString * unzippedFolderPath = [CodePushPackage getUnzippedFolderPath];
-                                                    NSMutableDictionary * mutableUpdatePackage = [updatePackage mutableCopy];
-                                                    if (isZip) {
-                                                        if ([[NSFileManager defaultManager] fileExistsAtPath:unzippedFolderPath]) {
-                                                            // This removes any unzipped download data that could have been left
-                                                            // uncleared due to a crash or error during the download process.
-                                                            [[NSFileManager defaultManager] removeItemAtPath:unzippedFolderPath
-                                                                                                       error:&error];
-                                                            if (error) {
-                                                                failCallback(error);
-                                                                return;
-                                                            }
-                                                        }
-
-                                                        NSError *nonFailingError = nil;
-                                                        [SSZipArchive unzipFileAtPath:downloadFilePath
-                                                                        toDestination:unzippedFolderPath];
-                                                        [[NSFileManager defaultManager] removeItemAtPath:downloadFilePath
-                                                                                                   error:&nonFailingError];
-                                                        if (nonFailingError) {
-                                                            CPLog(@"Error deleting downloaded file: %@", nonFailingError);
-                                                            nonFailingError = nil;
-                                                        }
-
-                                                        NSString *diffManifestFilePath = [unzippedFolderPath stringByAppendingPathComponent:DiffManifestFileName];
-                                                        BOOL isDiffUpdate = [[NSFileManager defaultManager] fileExistsAtPath:diffManifestFilePath];
-
-                                                        if (isDiffUpdate) {
-                                                            // Copy the current package to the new package.
-                                                            NSString *currentPackageFolderPath = [self getCurrentPackageFolderPath:&error];
-                                                            if (error) {
-                                                                failCallback(error);
-                                                                return;
-                                                            }
-
-                                                            if (currentPackageFolderPath == nil) {
-                                                                // Currently running the binary version, copy files from the bundled resources
-                                                                NSString *newUpdateCodePushPath = [newUpdateFolderPath stringByAppendingPathComponent:[CodePushUpdateUtils manifestFolderPrefix]];
-                                                                [[NSFileManager defaultManager] createDirectoryAtPath:newUpdateCodePushPath
-                                                                                          withIntermediateDirectories:YES
-                                                                                                           attributes:nil
-                                                                                                                error:&error];
-                                                                if (error) {
-                                                                    failCallback(error);
-                                                                    return;
-                                                                }
-
-                                                                [[NSFileManager defaultManager] copyItemAtPath:[CodePush bundleAssetsPath]
-                                                                                                        toPath:[newUpdateCodePushPath stringByAppendingPathComponent:[CodePushUpdateUtils assetsFolderName]]
-                                                                                                         error:&error];
-                                                                if (error) {
-                                                                    failCallback(error);
-                                                                    return;
-                                                                }
-
-                                                                [[NSFileManager defaultManager] copyItemAtPath:[[CodePush binaryBundleURL] path]
-                                                                                                        toPath:[newUpdateCodePushPath stringByAppendingPathComponent:[[CodePush binaryBundleURL] lastPathComponent]]
-                                                                                                         error:&error];
-                                                                if (error) {
-                                                                    failCallback(error);
-                                                                    return;
-                                                                }
-                                                            } else {
-                                                                [[NSFileManager defaultManager] copyItemAtPath:currentPackageFolderPath
-                                                                                                        toPath:newUpdateFolderPath
-                                                                                                         error:&error];
-                                                                if (error) {
-                                                                    failCallback(error);
-                                                                    return;
-                                                                }
-                                                            }
-
-                                                            // Delete files mentioned in the manifest.
-                                                            NSString *manifestContent = [NSString stringWithContentsOfFile:diffManifestFilePath
-                                                                                                                  encoding:NSUTF8StringEncoding
-                                                                                                                     error:&error];
-                                                            if (error) {
-                                                                failCallback(error);
-                                                                return;
-                                                            }
-
-                                                            NSData *data = [manifestContent dataUsingEncoding:NSUTF8StringEncoding];
-                                                            NSDictionary *manifestJSON = [NSJSONSerialization JSONObjectWithData:data
-                                                                                                                         options:kNilOptions
-                                                                                                                           error:&error];
-                                                            NSArray *deletedFiles = manifestJSON[@"deletedFiles"];
-                                                            for (NSString *deletedFileName in deletedFiles) {
-                                                                NSString *absoluteDeletedFilePath = [newUpdateFolderPath stringByAppendingPathComponent:deletedFileName];
-                                                                if ([[NSFileManager defaultManager] fileExistsAtPath:absoluteDeletedFilePath]) {
-                                                                    [[NSFileManager defaultManager] removeItemAtPath:absoluteDeletedFilePath
-                                                                                                               error:&error];
-                                                                    if (error) {
-                                                                        failCallback(error);
-                                                                        return;
-                                                                    }
-                                                                }
-                                                            }
-
-                                                            [[NSFileManager defaultManager] removeItemAtPath:diffManifestFilePath
-                                                                                                       error:&error];
-                                                            if (error) {
-                                                                failCallback(error);
-                                                                return;
-                                                            }
-                                                        }
-
-                                                        [CodePushUpdateUtils copyEntriesInFolder:unzippedFolderPath
-                                                                                      destFolder:newUpdateFolderPath
-                                                                                           error:&error];
-                                                        if (error) {
-                                                            failCallback(error);
-                                                            return;
-                                                        }
-
-                                                        [[NSFileManager defaultManager] removeItemAtPath:unzippedFolderPath
-                                                                                                   error:&nonFailingError];
-                                                        if (nonFailingError) {
-                                                            CPLog(@"Error deleting downloaded file: %@", nonFailingError);
-                                                            nonFailingError = nil;
-                                                        }
-
-                                                        NSString *relativeBundlePath = [CodePushUpdateUtils findMainBundleInFolder:newUpdateFolderPath
-                                                                                                                  expectedFileName:expectedBundleFileName
-                                                                                                                             error:&error];
-
-                                                        if (error) {
-                                                            failCallback(error);
-                                                            return;
-                                                        }
-
-                                                        if (relativeBundlePath) {
-                                                            [mutableUpdatePackage setValue:relativeBundlePath forKey:RelativeBundlePathKey];
-                                                        } else {
-                                                            NSString *errorMessage = [NSString stringWithFormat:@"Update is invalid - A JS bundle file named \"%@\" could not be found within the downloaded contents. Please ensure that your app is syncing with the correct deployment and that you are releasing your CodePush updates using the exact same JS bundle file name that was shipped with your app's binary.", expectedBundleFileName];
-
-                                                            error = [CodePushErrorUtils errorWithMessage:errorMessage];
-
-                                                            failCallback(error);
-                                                            return;
-                                                        }
-
-                                                        if ([[NSFileManager defaultManager] fileExistsAtPath:newUpdateMetadataPath]) {
-                                                            [[NSFileManager defaultManager] removeItemAtPath:newUpdateMetadataPath
-                                                                                                       error:&error];
-                                                            if (error) {
-                                                                failCallback(error);
-                                                                return;
-                                                            }
-                                                        }
-
-                                                        CPLog((isDiffUpdate) ? @"Applying diff update." : @"Applying full update.");
-
-                                                        BOOL isSignatureVerificationEnabled = (publicKey != nil);
-
-                                                        NSString *signatureFilePath = [CodePushUpdateUtils getSignatureFilePath:newUpdateFolderPath];
-                                                        BOOL isSignatureAppearedInBundle = [[NSFileManager defaultManager] fileExistsAtPath:signatureFilePath];
-
-                                                        if (isSignatureVerificationEnabled) {
-                                                            if (isSignatureAppearedInBundle) {
-                                                                if (![CodePushUpdateUtils verifyFolderHash:newUpdateFolderPath
-                                                                                              expectedHash:newUpdateHash
-                                                                                                     error:&error]) {
-                                                                    CPLog(@"The update contents failed the data integrity check.");
-                                                                    if (!error) {
-                                                                        error = [CodePushErrorUtils errorWithMessage:@"The update contents failed the data integrity check."];
-                                                                    }
-
-                                                                    failCallback(error);
-                                                                    return;
-                                                                } else {
-                                                                    CPLog(@"The update contents succeeded the data integrity check.");
-                                                                }
-                                                                BOOL isSignatureValid = [CodePushUpdateUtils verifyUpdateSignatureFor:newUpdateFolderPath
-                                                                                                                         expectedHash:newUpdateHash
-                                                                                                                        withPublicKey:publicKey
-                                                                                                                                error:&error];
-                                                                if (!isSignatureValid) {
-                                                                    CPLog(@"The update contents failed code signing check.");
-                                                                    if (!error) {
-                                                                        error = [CodePushErrorUtils errorWithMessage:@"The update contents failed code signing check."];
-                                                                    }
-                                                                    failCallback(error);
-                                                                    return;
-                                                                } else {
-                                                                    CPLog(@"The update contents succeeded the code signing check.");
-                                                                }
-                                                            } else {
-                                                                error = [CodePushErrorUtils errorWithMessage:
-                                                                         @"Error! Public key was provided but there is no JWT signature within app bundle to verify " \
-                                                                         "Possible reasons, why that might happen: \n" \
-                                                                         "1. You've been released CodePush bundle update using version of CodePush CLI that is not support code signing.\n" \
-                                                                         "2. You've been released CodePush bundle update without providing --privateKeyPath option."];
-                                                                failCallback(error);
-                                                                return;
-                                                            }
-
-                                                        } else {
-                                                            BOOL needToVerifyHash;
-                                                            if (isSignatureAppearedInBundle) {
-                                                                CPLog(@"Warning! JWT signature exists in codepush update but code integrity check couldn't be performed" \
-                                                                      " because there is no public key configured. " \
-                                                                      "Please ensure that public key is properly configured within your application.");
-                                                                needToVerifyHash = true;
-                                                            } else {
-                                                                needToVerifyHash = isDiffUpdate;
-                                                            }
-                                                            if(needToVerifyHash){
-                                                                if (![CodePushUpdateUtils verifyFolderHash:newUpdateFolderPath
-                                                                                              expectedHash:newUpdateHash
-                                                                                                     error:&error]) {
-                                                                    CPLog(@"The update contents failed the data integrity check.");
-                                                                    if (!error) {
-                                                                        error = [CodePushErrorUtils errorWithMessage:@"The update contents failed the data integrity check."];
-                                                                    }
-
-                                                                    failCallback(error);
-                                                                    return;
-                                                                } else {
-                                                                    CPLog(@"The update contents succeeded the data integrity check.");
-                                                                }
-                                                            }
-                                                        }
-                                                    } else {
-                                                        [[NSFileManager defaultManager] createDirectoryAtPath:newUpdateFolderPath
-                                                                                  withIntermediateDirectories:YES
-                                                                                                   attributes:nil
-                                                                                                        error:&error];
-                                                        [[NSFileManager defaultManager] moveItemAtPath:downloadFilePath
-                                                                                                toPath:bundleFilePath
-                                                                                                 error:&error];
-                                                        if (error) {
-                                                            failCallback(error);
-                                                            return;
-                                                        }
-                                                    }
-
-                                                    NSData *updateSerializedData = [NSJSONSerialization dataWithJSONObject:mutableUpdatePackage
-                                                                                                                   options:0
-                                                                                                                     error:&error];
-                                                    NSString *packageJsonString = [[NSString alloc] initWithData:updateSerializedData
-                                                                                                        encoding:NSUTF8StringEncoding];
-
-                                                    [packageJsonString writeToFile:newUpdateMetadataPath
-                                                                        atomically:YES
-                                                                          encoding:NSUTF8StringEncoding
-                                                                             error:&error];
-                                                    if (error) {
-                                                        failCallback(error);
-                                                    } else {
-                                                        doneCallback();
-                                                    }
-                                                }
-
-                                                failCallback:failCallback];
-
-    [downloadHandler download:updatePackage[@"downloadUrl"]];
-}
-*/
-
 StorageFolder GetCodePushFolder()
 {
-    /*
     auto localStorage{ CodePushNativeModule::GetLocalStorageFolder() };
-    if (false)
+    auto codePushFolder{ localStorage.CreateFolderAsync(L"CodePush", CreationCollisionOption::OpenIfExists).get() };
+    if (false /*CodePushNativeModule::IsUsingTestConfiguration()*/) // How can I have this static function refer to a member variable
     {
-        localStorage = FileUtils::GetOrCreateFolderAsync(localStorage, L"TestPackages").get();
+        return codePushFolder.CreateFolderAsync(L"TestPackages", CreationCollisionOption::OpenIfExists).get();
     }
-    return FileUtils::GetOrCreateFolderAsync(localStorage, L"CodePush").get();
-    */
+    return codePushFolder;
 }
 
 path GetCodePushPath()
@@ -816,9 +401,15 @@ IAsyncOperation<hstring> GetPreviousPackageHashAsync()
     co_return info.Lookup(L"previousPackage").GetString();
 }
 
+StorageFile GetDownloadFile()
+{
+    return FileUtils::GetOrCreateFileAsync(GetCodePushFolder(), CodePushPackage::DownloadFileName).get();
+}
+
 path GetDownloadFilePath()
 {
     return GetCodePushPath() / CodePushPackage::DownloadFileName;
+    //return GetDownloadFile().Path().c_str();
 }
 
 /*
@@ -846,15 +437,29 @@ IAsyncOperation<JsonObject> CodePushPackage::GetPackageAsync(wstring_view packag
 	co_return nullptr;
 }
 
+
+
 path CodePushPackage::GetPackageFolderPath(wstring_view packageHash)
 {
     return GetCodePushPath() / packageHash;
+}
+
+StorageFile GetStatusFile()
+{
+    auto localStorage{ CodePushNativeModule::GetLocalStorageFolder() };
+    return (localStorage.TryGetItemAsync(CodePushPackage::StatusFile).get().try_as<StorageFile>());
 }
 
 path GetStatusFilePath()
 {
     auto localStorage{ CodePushNativeModule::GetLocalStoragePath() };
     return localStorage / CodePushPackage::StatusFile;
+    //return GetStatusFile().Path().c_str();
+}
+
+StorageFolder GetUnzippedFolder()
+{
+    return FileUtils::GetFolderAtPathAsync(GetCodePushFolder(), CodePushPackage::UnzippedFolderName).get();
 }
 
 path GetUnzippedFolderPath()
