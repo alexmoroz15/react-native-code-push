@@ -4,6 +4,7 @@
 
 #include <string>
 #include <filesystem>
+#include <optional>
 #include "winrt/Microsoft.ReactNative.h"
 #include "winrt/Windows.Data.Json.h"
 #include "winrt/Windows.Foundation.Collections.h"
@@ -30,20 +31,20 @@ namespace CodePush
 		IMap<hstring, hstring> configuration;
 
 	public:
-		hstring GetAppVersion() { return configuration.Lookup(AppVersionConfigKey); }
+		std::optional<hstring> GetAppVersion() { return configuration.TryLookup(AppVersionConfigKey); }
 		void SetAppVersion(wstring_view appVersion) { configuration.Insert(AppVersionConfigKey, appVersion); }
 
-		hstring GetBuildVersion() { return configuration.Lookup(BuildVersionConfigKey); }
+		std::optional<hstring> GetBuildVersion() { return configuration.TryLookup(BuildVersionConfigKey); }
 		
 		JsonObject GetConfiguration();
 
-		hstring GetDeploymentKey() { return configuration.Lookup(DeploymentKeyConfigKey); }
+		std::optional<hstring> GetDeploymentKey() { return configuration.TryLookup(DeploymentKeyConfigKey); }
 		void SetDeploymentKey(wstring_view deploymentKey) { configuration.Insert(DeploymentKeyConfigKey, deploymentKey); }
 
-		hstring GetServerUrl() { return configuration.Lookup(ServerURLConfigKey); }
+		std::optional<hstring> GetServerUrl() { return configuration.TryLookup(ServerURLConfigKey); }
 		void SetServerUrl(wstring_view serverUrl) { configuration.Insert(ServerURLConfigKey, serverUrl); }
 
-		hstring GetPublicKey() { return configuration.Lookup(PublicKeyKey); }
+		std::optional<hstring> GetPublicKey() { return configuration.TryLookup(PublicKeyKey); }
 		void SetPublicKey(wstring_view publicKey) { configuration.Insert(PublicKeyKey, publicKey); }
 
 		static CodePushConfig Init(const ReactContext& context);
