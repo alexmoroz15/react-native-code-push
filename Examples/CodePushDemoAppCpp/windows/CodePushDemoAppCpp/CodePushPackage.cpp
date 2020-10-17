@@ -35,8 +35,19 @@ StorageFolder GetUnzippedFolder();
 path GetUnzippedFolderPath();
 IAsyncOperation<bool> UpdateCurrentPackageInfoAsync(JsonObject packageInfo);
 
+IAsyncAction CodePushPackage::ClearUpdatesAsync()
+{
+    auto codePushFolder{ co_await GetCodePushFolderAsync() };
+    codePushFolder.DeleteAsync();
+}
+
+IAsyncAction CodePushPackage::DownloadAndReplaceCurrentBundleAsync(wstring_view remoteBundleUrl)
+{
+    co_return;
+}
+
 IAsyncAction CodePushPackage::DownloadPackageAsync(
-    JsonObject updatePackage,
+    JsonObject& updatePackage,
     wstring_view expectedBundleFileName,
     wstring_view publicKey,
     function<void(int64_t, int64_t)> progressCallback)
@@ -323,7 +334,12 @@ IAsyncOperation<hstring> CodePushPackage::GetCurrentPackageHashAsync()
     {
         co_return L"";
     }
-    co_return info.Lookup(L"currentPackage").GetString();
+    auto currentPackage{ info.TryLookup(L"currentPackage") };
+    if (currentPackage == nullptr)
+    {
+        co_return L"";
+    }
+    co_return currentPackage.GetString();
 }
 
 IAsyncOperation<JsonObject> GetCurrentPackageInfoAsync()
@@ -333,7 +349,7 @@ IAsyncOperation<JsonObject> GetCurrentPackageInfoAsync()
         auto statusFile{ co_await GetStatusFileAsync() };
         if (statusFile == nullptr)
         {
-            co_return nullptr;
+            co_return JsonObject{};
         }
         auto content{ co_await FileIO::ReadTextAsync(statusFile) };
         JsonObject json;
@@ -369,7 +385,12 @@ IAsyncOperation<hstring> GetPreviousPackageHashAsync()
     {
         co_return L"";
     }
-    co_return info.Lookup(L"previousPackage").GetString();
+    auto previousHash{ info.TryLookup(L"previousPackage") };
+    if (previousHash == nullptr)
+    {
+        co_return L"";
+    }
+    co_return previousHash.GetString();
 }
 
 path GetDownloadFilePath()
@@ -414,8 +435,8 @@ IAsyncOperation<bool> CodePushPackage::InstallPackageAsync(JsonObject updatePack
     {
         co_return false;
     }
-
-    if (packageHash == info.GetNamedString(L"currentPackage"))
+    
+    if (info.HasKey(L"currentPackage") && packageHash == info.GetNamedString(L"currentPackage"))
     {
         // The current package is already the one being installed, so we should no-op.
         co_return true;
@@ -451,7 +472,17 @@ IAsyncOperation<bool> CodePushPackage::InstallPackageAsync(JsonObject updatePack
                 CodePushUtils::Log(L"Error deleting old package.");
             }
         }
-        info.Insert(L"previousPackage", info.Lookup(L"currentPackage"));
+
+        IJsonValue currentPackage;
+        if (info.HasKey(L"currentPackage"))
+        {
+            currentPackage = info.Lookup(L"currentPackage");
+        }
+        else
+        {
+            currentPackage = JsonValue::CreateStringValue(L"");
+        }
+        info.Insert(L"previousPackage", currentPackage);
     }
 
     info.Insert(L"currentPackage", JsonValue::CreateStringValue(packageHash));
@@ -479,6 +510,11 @@ IAsyncOperation<bool> UpdateCurrentPackageInfoAsync(JsonObject packageInfo)
 {
     auto packageInfoString{ packageInfo.Stringify() };
     auto infoFile{ co_await GetStatusFileAsync() };
+    if (infoFile == nullptr)
+    {
+        auto codePushFolder{ co_await GetCodePushFolderAsync() };
+        infoFile = co_await codePushFolder.CreateFileAsync(CodePushPackage::StatusFile);
+    }
     co_await FileIO::WriteTextAsync(infoFile, packageInfoString);
     co_return true;
 }

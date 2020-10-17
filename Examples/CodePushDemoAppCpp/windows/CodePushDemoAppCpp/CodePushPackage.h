@@ -61,8 +61,10 @@ namespace CodePush
 		inline static const wstring UpdateMetadataFileName{ L"app.json" };
 		inline static const wstring UnzippedFolderName{ L"unzipped" };
 
+		static IAsyncAction ClearUpdatesAsync();
+
 		static IAsyncAction DownloadPackageAsync(
-			JsonObject updatePackage,
+			JsonObject& updatePackage,
 			wstring_view expectedBundleFileName,
 			wstring_view publicKey,
 			function<void(int64_t, int64_t)> progressCallback);
@@ -83,6 +85,6 @@ namespace CodePush
 
 		// The below methods are only used during tests.
 		static void ClearUpdates();
-		static IAsyncAction DownloadAndReplaceCurrentBundleAsync(wstring remoteBundleUrl);
+		static IAsyncAction DownloadAndReplaceCurrentBundleAsync(wstring_view remoteBundleUrl);
 	};
 }
