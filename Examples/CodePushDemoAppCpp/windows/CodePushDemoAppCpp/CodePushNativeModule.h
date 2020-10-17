@@ -74,7 +74,7 @@ namespace CodePush
 		// These keys are used to inspect/augment the metadata
 		// that is associated with an update's package.
 		const wstring AppVersionKey{ L"appVersion" };
-		const wstring BinaryDateKey{ L"binaryDate" }; // The date of the BUILD -> the modified date of the executable
+		const wstring BinaryBundleDateKey{ L"binaryDate" }; // The date of the BUILD -> the modified date of the executable
 		const wstring PackageHashKey{ L"packageHash" };
 		const wstring PackageIsPendingKey{ L"isPending" };
 
@@ -104,6 +104,7 @@ namespace CodePush
 
 		void DispatchDownloadProgressEvent();
 		void LoadBundle();
+		void RemoveFailedUpdates();
 		void RemovePendingUpdate();
 		void RestartAppInternal(bool onlyIfUpdateIsPending);
 		void SaveFailedUpdate(JsonObject& failedPackage);
@@ -125,7 +126,7 @@ namespace CodePush
 			LATEST = 2
 		};
 
-		static IAsyncOperation<StorageFile> GetBinaryAsync();
+		static IAsyncOperation<StorageFile> GetBinaryBundleAsync();
 		static IAsyncOperation<StorageFile> GetBundleFileAsync();
 		static path GetBundlePath();
 
@@ -200,7 +201,7 @@ namespace CodePush
          * module, and is only used internally to populate the LocalPackage.isFirstRun property.
          */
 		REACT_METHOD(IsFirstRun, L"isFirstRun");
-		void IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept;
+		fire_and_forget IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.notifyApplicationReady() method.
@@ -230,7 +231,7 @@ namespace CodePush
          * automatically when needed in other cases) as it could lead to unpredictable behavior.
          */
 		REACT_METHOD(ClearUpdates, L"clearUpdates");
-		void ClearUpdates() noexcept;
+		fire_and_forget ClearUpdates() noexcept;
 
     // #pragma mark - JavaScript-exported module methods (Private)
 
@@ -241,7 +242,7 @@ namespace CodePush
          * configuration flag is not set.
          */
 		REACT_METHOD(DownloadAndReplaceCurrentBundle, L"downloadAndReplaceCurrentBundle");
-		void DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept;
+		fire_and_forget DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept;
 
         /*
          * This method is checks if a new status update exists (new version was installed,

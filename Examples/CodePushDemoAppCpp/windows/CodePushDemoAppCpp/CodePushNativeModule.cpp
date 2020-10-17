@@ -24,6 +24,8 @@
 
 #include "AutolinkedNativeModules.g.h"
 #include "ReactPackageProvider.h"
+#include "winrt/Windows.ApplicationModel.h"
+#include "winrt/Windows.Storage.FileProperties.h"
 
 using namespace winrt;
 using namespace Microsoft::ReactNative;
@@ -38,22 +40,18 @@ using namespace filesystem;
 
 using namespace CodePush;
 
-IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryAsync() 
-{ 
-    //return nullptr;
-    Uri binaryUri{ L"ms-appx:///" };
-    //auto bla{ Windows::ApplicationModel::Package::Current().InstalledPath() };
-    auto binaryFolder{ co_await StorageFolder::GetFolderFromPathAsync(binaryUri.Path()) };
-    auto binaryFolderFiles{ co_await binaryFolder.GetFilesAsync() };
-    for (const auto& file : binaryFolderFiles)
+//constexpr static int64_t UNIX_EPOCH_IN_WINRT_SECONDS = 11644473600;
+
+IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryBundleAsync() 
+{
+    auto appXFolder{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
+    auto bundleFolder{ (co_await appXFolder.TryGetItemAsync(L"Bundle")).try_as<StorageFolder>() };
+    if (bundleFolder == nullptr)
     {
-        wstring fileName{ file.Name() };
-        if (fileName.rfind(L".exe") != wstring::npos)
-        {
-            co_return file;
-        }
+        co_return nullptr;
     }
-    co_return nullptr;
+    auto bundleFile{ (co_await bundleFolder.TryGetItemAsync(L"index.windows.bundle")).try_as<StorageFile>() };
+    co_return bundleFile;
 }
 
 
@@ -61,8 +59,6 @@ IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync()
 { 
     co_return nullptr; 
 }
-
-
 
 //path CodePushNativeModule::GetBundlePath() { return nullptr; }
 
@@ -87,8 +83,15 @@ void CodePushNativeModule::SetDeploymentKey(wstring_view deploymentKey) {}
 bool CodePushNativeModule::IsFailedHash(wstring_view packageHash) 
 { 
     auto localSettings{ ApplicationData::Current().LocalSettings() };
-    auto failedUpdates{ localSettings.Values().TryLookup(FailedUpdatesKey).try_as<JsonArray>() };
-    if (failedUpdates == nullptr || packageHash.empty())
+    auto failedUpdatesData{ localSettings.Values().TryLookup(FailedUpdatesKey) };
+    if (failedUpdatesData == nullptr)
+    {
+        return false;
+    }
+    auto failedUpdatesString{ unbox_value<hstring>(failedUpdatesData) };
+    JsonArray failedUpdates;
+    auto success{ JsonArray::TryParse(failedUpdatesString, failedUpdates) };
+    if (!success || packageHash.empty())
     {
         return false;
     }
@@ -168,22 +171,26 @@ void CodePushNativeModule::LoadBundle()
 }
 
 /*
+ * This method is used to clear away failed updates in the event that
+ * a new app store binary is installed.
+ */
+
+void CodePushNativeModule::RemoveFailedUpdates()
+{
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    localSettings.Values().TryRemove(FailedUpdatesKey);
+}
+
+/*
  * This method is used to register the fact that a pending
  * update succeeded and therefore can be removed.
  */
 void CodePushNativeModule::RemovePendingUpdate()
 {
     // remove pending update from LocalSettings
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    localSettings.Values().TryRemove(PendingUpdateKey);
 }
-
-/*
-+ (void)removePendingUpdate
-{
-    NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
-    [preferences removeObjectForKey:PendingUpdateKey];
-    [preferences synchronize];
-}
-*/
 
 void CodePushNativeModule::RestartAppInternal(bool onlyIfUpdateIsPending)
 {
@@ -200,7 +207,7 @@ void CodePushNativeModule::RestartAppInternal(bool onlyIfUpdateIsPending)
     }
 
     m_restartInProgress = true;
-    if (!onlyIfUpdateIsPending || IsPendingUpdate(nullptr))
+    if (!onlyIfUpdateIsPending || IsPendingUpdate(L""))
     {
         LoadBundle();
         CodePushUtils::Log(L"Restarting app.");
@@ -236,7 +243,7 @@ void CodePushNativeModule::SaveFailedUpdate(JsonObject& failedPackage)
     }
 
     failedUpdates.Append(failedPackage);
-    localSettings.Values().Insert(FailedUpdatesKey, failedUpdates);
+    localSettings.Values().Insert(FailedUpdatesKey, box_value(failedUpdates.Stringify()));
 }
 
 /*
@@ -252,14 +259,12 @@ void CodePushNativeModule::SavePendingUpdate(wstring_view packageHash, bool isLo
     JsonObject pendingUpdate{};
     pendingUpdate.Insert(PendingUpdateHashKey, JsonValue::CreateStringValue(packageHash));
     pendingUpdate.Insert(PendingUpdateIsLoadingKey, JsonValue::CreateBooleanValue(isLoading));
-    localSettings.Values().Insert(PendingUpdateKey, pendingUpdate);
+    localSettings.Values().Insert(PendingUpdateKey, box_value(pendingUpdate.Stringify()));
 }
 
 void CodePushNativeModule::Initialize(ReactContext const& reactContext) noexcept
 {
     m_context = reactContext;
-
-    //auto bla{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
 
     auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
     m_host = res.as<ReactNativeHost>();
@@ -284,42 +289,31 @@ void CodePushNativeModule::GetConstants(winrt::Microsoft::ReactNative::ReactCons
  */
 fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePackage, bool notifyProgress, ReactPromise<IJsonValue> promise) noexcept
 {
-    auto mutableUpdatePackage{ updatePackage };
-    //auto binary{ co_await GetBinaryAsync() };
-    /*
-    path binaryBundlePath{ GetBinaryBundlePath() };
-    if (!binaryBundlePath.empty())
+    //auto mutableUpdatePackage{ updatePackage };
+    auto binaryBundle{ co_await GetBinaryBundleAsync() };
+    if (binaryBundle != nullptr)
     {
-        mutableUpdatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(CodePushUpdateUtils::ModifiedDateStringOfFileAtPath(binaryBundlePath)));
-    }
-    */
-
-    bool paused{ false };
-    if (notifyProgress)
-    {
-        m_didUpdateProgress = false;
-        paused = false;
+        auto basicProperties{ co_await binaryBundle.GetBasicPropertiesAsync() };
+        auto modifiedDate{ basicProperties.DateModified() };
+        //auto mtime{ modifiedDate.time_since_epoch() / std::chrono::seconds(1) - UNIX_EPOCH_IN_WINRT_SECONDS };
+        auto mtime{ clock::to_time_t(modifiedDate) };
+        updatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(to_hstring(mtime)));
     }
 
-    //auto publicKey{ CodePushConfig::Current().GetPublicKey() };
-    //auto publicKey{ m_codePushConfig.GetPublicKey() };
+    auto publicKey{ m_codePushConfig.GetPublicKey() };
+
     try
     {
         co_await CodePushPackage::DownloadPackageAsync(
-            mutableUpdatePackage,
+            updatePackage,
             /* m_host.InstanceSettings().JavaScriptBundleFile() */ L"index.windows.bundle",
-            /* publicKey */ L"",
+            /* publicKey */ ((publicKey.has_value()) ? publicKey.value() : L""),
             /* progressCallback */ [=](int64_t expectedContentLength, int64_t receivedContentLength) {
-                // Update the download progress so that the frame observer can notify the JS side
-                m_latestExpectedContentLength = expectedContentLength;
-                m_latestReceivedContentLength = receivedContentLength;
-                m_didUpdateProgress = true;
-
-                // If the download is completed, stop observing frame
-                // updates and synchronously send the last event.
-                if (expectedContentLength == receivedContentLength) {
-                    m_didUpdateProgress = false;
-                    //paused = true;
+                // React-Native-Windows doesn't have a frame observer to my knowledge.
+                if (notifyProgress)
+                {
+                    m_latestExpectedContentLength = expectedContentLength;
+                    m_latestReceivedContentLength = receivedContentLength;
                     DispatchDownloadProgressEvent();
                 }
             });
@@ -327,16 +321,15 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
     catch (const hresult_error& ex)
     {
         // If the error is a codepush error...
-        auto updatePackage = mutableUpdatePackage;
+        //auto updatePackage = mutableUpdatePackage;
         SaveFailedUpdate(updatePackage);
 
         // Stop observing frame updates if the download fails.
         m_didUpdateProgress = false;
-        //paused = true;
         promise.Reject(ex.message().c_str());
     }
 
-    auto newPackage{ co_await CodePushPackage::GetPackageAsync(mutableUpdatePackage.GetNamedString(PackageHashKey)) };
+    auto newPackage{ co_await CodePushPackage::GetPackageAsync(updatePackage.GetNamedString(PackageHashKey)) };
     if (newPackage == nullptr)
     {
         promise.Resolve(JsonValue::CreateNullValue());
@@ -350,72 +343,6 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
 }
 
 /*
-RCT_EXPORT_METHOD(downloadUpdate:(NSDictionary*)updatePackage
-                  notifyProgress:(BOOL)notifyProgress
-                        resolver:(RCTPromiseResolveBlock)resolve
-                        rejecter:(RCTPromiseRejectBlock)reject)
-{
-    NSDictionary *mutableUpdatePackage = [updatePackage mutableCopy];
-    NSURL *binaryBundleURL = [CodePush binaryBundleURL];
-    if (binaryBundleURL != nil) {
-        [mutableUpdatePackage setValue:[CodePushUpdateUtils modifiedDateStringOfFileAtURL:binaryBundleURL]
-                                forKey:BinaryBundleDateKey];
-    }
-
-    if (notifyProgress) {
-        // Set up and unpause the frame observer so that it can emit
-        // progress events every frame if the progress is updated.
-        _didUpdateProgress = NO;
-        self.paused = NO;
-    }
-
-    NSString * publicKey = [[CodePushConfig current] publicKey];
-
-    [CodePushPackage
-        downloadPackage:mutableUpdatePackage
-        expectedBundleFileName:[bundleResourceName stringByAppendingPathExtension:bundleResourceExtension]
-        publicKey:publicKey
-        operationQueue:_methodQueue
-        // The download is progressing forward
-        progressCallback:^(long long expectedContentLength, long long receivedContentLength) {
-            // Update the download progress so that the frame observer can notify the JS side
-            _latestExpectedContentLength = expectedContentLength;
-            _latestReceivedConentLength = receivedContentLength;
-            _didUpdateProgress = YES;
-
-            // If the download is completed, stop observing frame
-            // updates and synchronously send the last event.
-            if (expectedContentLength == receivedContentLength) {
-                _didUpdateProgress = NO;
-                self.paused = YES;
-                [self dispatchDownloadProgressEvent];
-            }
-        }
-        // The download completed
-        doneCallback:^{
-            NSError *err;
-            NSDictionary *newPackage = [CodePushPackage getPackage:mutableUpdatePackage[PackageHashKey] error:&err];
-
-            if (err) {
-                return reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
-            }
-            resolve(newPackage);
-        }
-        // The download failed
-        failCallback:^(NSError *err) {
-            if ([CodePushErrorUtils isCodePushError:err]) {
-                [self saveFailedUpdate:mutableUpdatePackage];
-            }
-
-            // Stop observing frame updates if the download fails.
-            _didUpdateProgress = NO;
-            self.paused = YES;
-            reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
-        }];
-}
-*/
-
-/*
  * This is the native side of the CodePush.getConfiguration method. It isn't
  * currently exposed via the "react-native-code-push" module, and is used
  * internally only by the CodePush.checkForUpdate method in order to get the
@@ -426,6 +353,28 @@ void CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> promise) no
     auto configuration{ m_codePushConfig.GetConfiguration() };
     if (isRunningBinaryVersion)
     {
+        /*
+        // isRunningBinaryVersion will not get set to "YES" if running against the packager.
+        NSString* binaryHash = [CodePushUpdateUtils getHashForBinaryContents : [CodePush binaryBundleURL] error : &error];
+        if (error) {
+            CPLog(@"Error obtaining hash for binary contents: %@", error);
+            resolve(configuration);
+            return;
+        }
+
+        if (binaryHash == nil) {
+            // The hash was not generated either due to a previous unknown error or the fact that
+            // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
+            // builds.
+            resolve(configuration);
+            return;
+        }
+
+        NSMutableDictionary* mutableConfiguration = [configuration mutableCopy];
+        [mutableConfiguration setObject : binaryHash forKey : PackageHashKey] ;
+        resolve(mutableConfiguration);
+        return;
+        */
         // ...
     }
     promise.Resolve(configuration);
@@ -512,53 +461,6 @@ fire_and_forget CodePushNativeModule::GetUpdateMetadataAsync(CodePushUpdateState
 }
 
 /*
-RCT_EXPORT_METHOD(getUpdateMetadata:(CodePushUpdateState)updateState
-                           resolver:(RCTPromiseResolveBlock)resolve
-                           rejecter:(RCTPromiseRejectBlock)reject)
-{
-    NSError *error;
-    NSMutableDictionary *package = [[CodePushPackage getCurrentPackage:&error] mutableCopy];
-
-    if (error) {
-        return reject([NSString stringWithFormat: @"%lu", (long)error.code], error.localizedDescription, error);
-    } else if (package == nil) {
-        // The app hasn't downloaded any CodePush updates yet,
-        // so we simply return nil regardless if the user
-        // wanted to retrieve the pending or running update.
-        return resolve(nil);
-    }
-
-    // We have a CodePush update, so let's see if it's currently in a pending state.
-    BOOL currentUpdateIsPending = [[self class] isPendingUpdate:[package objectForKey:PackageHashKey]];
-
-    if (updateState == CodePushUpdateStatePending && !currentUpdateIsPending) {
-        // The caller wanted a pending update
-        // but there isn't currently one.
-        resolve(nil);
-    } else if (updateState == CodePushUpdateStateRunning && currentUpdateIsPending) {
-        // The caller wants the running update, but the current
-        // one is pending, so we need to grab the previous.
-        resolve([CodePushPackage getPreviousPackage:&error]);
-    } else {
-        // The current package satisfies the request:
-        // 1) Caller wanted a pending, and there is a pending update
-        // 2) Caller wanted the running update, and there isn't a pending
-        // 3) Caller wants the latest update, regardless if it's pending or not
-        if (isRunningBinaryVersion) {
-            // This only matters in Debug builds. Since we do not clear "outdated" updates,
-            // we need to indicate to the JS side that somehow we have a current update on
-            // disk that is not actually running.
-            [package setObject:@(YES) forKey:@"_isDebugOnly"];
-        }
-
-        // Enable differentiating pending vs. non-pending updates
-        [package setObject:@(currentUpdateIsPending) forKey:PackageIsPendingKey];
-        resolve(package);
-    }
-}
-*/
-
-/*
  * This method is the native side of the LocalPackage.install method.
  */
 fire_and_forget CodePushNativeModule::InstallUpdateAsync(JsonObject updatePackage, CodePushInstallMode installMode, int minimumBackgroundDuration, ReactPromise<void> promise) noexcept 
@@ -615,24 +517,71 @@ void CodePushNativeModule::IsFailedUpdate(wstring packageHash, ReactPromise<bool
 }
 
 /*
-RCT_EXPORT_METHOD(isFailedUpdate:(NSString *)packageHash
-                         resolve:(RCTPromiseResolveBlock)resolve
-                          reject:(RCTPromiseRejectBlock)reject)
+ * This method is used to save information about the latest rollback.
+ * This information will be used to decide whether the application
+ * should ignore the update or not.
+ */
+void CodePushNativeModule::SetLatestRollbackInfo(wstring packageHash) noexcept 
 {
-    BOOL isFailedHash = [[self class] isFailedHash:packageHash];
-    resolve(@(isFailedHash));
+    if (packageHash.empty())
+    {
+        return;
+    }
+
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    JsonObject latestRollbackInfo;
+    auto res{ localSettings.Values().TryLookup(LatestRollbackInfoKey) };
+    if (res != nullptr)
+    {
+        auto infoString{ unbox_value<hstring>(res) };
+        JsonObject::TryParse(infoString, latestRollbackInfo);
+    }
+
+    auto initialRollbackCount{ GetRollbackCountForPackage(packageHash, latestRollbackInfo) };
+    auto count{ initialRollbackCount + 1 };
+    auto currentTimeMillis{ clock::to_time_t(clock::now()) * 1000 };
+
+    latestRollbackInfo.Insert(LatestRollbackCountKey, JsonValue::CreateNumberValue(count));
+    latestRollbackInfo.Insert(LatestRollbackTimeKey, JsonValue::CreateNumberValue(currentTimeMillis));
+    latestRollbackInfo.Insert(LatestRollbackPackageHashKey, JsonValue::CreateStringValue(packageHash));
+
+    localSettings.Values().Insert(LatestRollbackInfoKey, box_value(latestRollbackInfo.Stringify()));
 }
-*/
 
-void CodePushNativeModule::SetLatestRollbackInfo(wstring packageHash) noexcept {}
-
-void CodePushNativeModule::GetLatestRollbackInfo(ReactPromise<IJsonValue> promise) noexcept {}
+/*
+ * This method is used to get information about the latest rollback.
+ * This information will be used to decide whether the application
+ * should ignore the update or not.
+ */
+void CodePushNativeModule::GetLatestRollbackInfo(ReactPromise<IJsonValue> promise) noexcept 
+{
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    auto res{ localSettings.Values().TryLookup(LatestRollbackInfoKey) };
+    auto infoString{ unbox_value<hstring>(res) };
+    JsonObject latestRollbackInfo;
+    auto success{ JsonObject::TryParse(infoString, latestRollbackInfo) };
+    if (success)
+    {
+        promise.Resolve(latestRollbackInfo);
+    }
+    else
+    {
+        promise.Resolve(JsonValue::CreateNullValue());
+    }
+}
 
 /*
  * This method isn't publicly exposed via the "react-native-code-push"
  * module, and is only used internally to populate the LocalPackage.isFirstRun property.
  */
-void CodePushNativeModule::IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept {}
+fire_and_forget CodePushNativeModule::IsFirstRun(wstring packageHash, ReactPromise<bool> promise) noexcept 
+{
+    auto isFirstRun = m_isFirstRunAfterUpdate
+        && !packageHash.empty()
+        && packageHash == co_await CodePushPackage::GetCurrentPackageHashAsync();
+
+    promise.Resolve(isFirstRun);
+}
 
 /*
  * This method is the native side of the CodePush.notifyApplicationReady() method.
@@ -642,15 +591,6 @@ void CodePushNativeModule::NotifyApplicationReady(ReactPromise<IJsonValue> promi
     RemovePendingUpdate();
     promise.Resolve(JsonValue::CreateNullValue());
 }
-
-/*
-RCT_EXPORT_METHOD(notifyApplicationReady:(RCTPromiseResolveBlock)resolve
-                                rejecter:(RCTPromiseRejectBlock)reject)
-{
-    [CodePush removePendingUpdate];
-    resolve(nil);
-}
-*/
 
 void CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept 
 {
@@ -668,7 +608,10 @@ void CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept
     promise.Resolve(JSValue::Null);
 }
 
-void CodePushNativeModule::ClearPendingRestart() noexcept {}
+void CodePushNativeModule::ClearPendingRestart() noexcept 
+{
+    m_restartQueue.clear();
+}
 
 void CodePushNativeModule::Disallow(ReactPromise<JSValue> promise) noexcept
 {
@@ -692,7 +635,12 @@ void CodePushNativeModule::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<J
  * Note: we don’t recommend to use this method in scenarios other than that (CodePush will call this method
  * automatically when needed in other cases) as it could lead to unpredictable behavior.
  */
-void CodePushNativeModule::ClearUpdates() noexcept {}
+fire_and_forget CodePushNativeModule::ClearUpdates() noexcept 
+{
+    co_await CodePushPackage::ClearUpdatesAsync();
+    RemovePendingUpdate();
+    RemoveFailedUpdates();
+}
 
 // #pragma mark - JavaScript-exported module methods (Private)
 
@@ -702,7 +650,13 @@ void CodePushNativeModule::ClearUpdates() noexcept {}
  * removeBundleUrl. It is only to be used during tests and no-ops if the test
  * configuration flag is not set.
  */
-void CodePushNativeModule::DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept {}
+fire_and_forget CodePushNativeModule::DownloadAndReplaceCurrentBundle(wstring remoteBundleUrl) noexcept 
+{
+    if (IsUsingTestConfiguration())
+    {
+        co_await CodePushPackage::DownloadAndReplaceCurrentBundleAsync(remoteBundleUrl);
+    }
+}
 
 /*
  * This method is checks if a new status update exists (new version was installed,
@@ -781,9 +735,15 @@ RCT_EXPORT_METHOD(getNewStatusReport:(RCTPromiseResolveBlock)resolve
 }
 */
 
-void CodePushNativeModule::RecordStatusReported(JsonObject statusReport) noexcept {}
+void CodePushNativeModule::RecordStatusReported(JsonObject statusReport) noexcept 
+{
+    CodePushTelemetryManager::RecordStatusReported(statusReport);
+}
 
-void CodePushNativeModule::SaveStatusReportForRetry(JsonObject statusReport) noexcept {}
+void CodePushNativeModule::SaveStatusReportForRetry(JsonObject statusReport) noexcept 
+{
+    CodePushTelemetryManager::SaveStatusReportForRetry(statusReport);
+}
 
 // Helper functions for reading and sending JsonValues to and from JavaScript
 namespace winrt::Microsoft::ReactNative
