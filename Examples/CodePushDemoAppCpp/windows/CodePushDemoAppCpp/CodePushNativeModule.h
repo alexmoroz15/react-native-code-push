@@ -141,14 +141,12 @@ namespace CodePush
 		bool IsFailedHash(wstring_view packageHash);
 
 		JsonObject GetRollbackInfo();
-		//void SetLatestRollbackInfo(wstring_view packageHash);
-		int GetRollbackCountForPackage(wstring_view packageHash, JsonObject latestRollbackInfo);
+		int GetRollbackCountForPackage(wstring_view packageHash, const JsonObject& latestRollbackInfo);
 
 		bool IsPendingUpdate(wstring_view packageHash);
 
 		bool IsUsingTestConfiguration();
-		void SetUsingTestConfiguration();
-		//void ClearUpdates();
+		void SetUsingTestConfiguration(bool shouldUseTestConfiguration);
 
 		REACT_INIT(Initialize);
 		void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;

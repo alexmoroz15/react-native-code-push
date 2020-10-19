@@ -40,8 +40,6 @@ using namespace filesystem;
 
 using namespace CodePush;
 
-//constexpr static int64_t UNIX_EPOCH_IN_WINRT_SECONDS = 11644473600;
-
 IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryBundleAsync() 
 {
     auto appXFolder{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
@@ -60,8 +58,6 @@ IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync()
     co_return nullptr; 
 }
 
-//path CodePushNativeModule::GetBundlePath() { return nullptr; }
-
 // Rather than store files in the library files, CodePush for ReactNativeWindows will use AppData folders.
 StorageFolder CodePushNativeModule::GetLocalStorageFolder()
 {
@@ -73,8 +69,15 @@ path CodePushNativeModule::GetLocalStoragePath()
     return wstring_view(GetLocalStorageFolder().Path());
 }
 
-void CodePushNativeModule::OverrideAppVersion(wstring_view appVersion) {}
-void CodePushNativeModule::SetDeploymentKey(wstring_view deploymentKey) {}
+void CodePushNativeModule::OverrideAppVersion(wstring_view appVersion) 
+{
+    m_codePushConfig.SetAppVersion(appVersion);
+}
+
+void CodePushNativeModule::SetDeploymentKey(wstring_view deploymentKey) 
+{
+    m_codePushConfig.SetDeploymentKey(deploymentKey);
+}
 
 /*
  * This method checks to see whether a specific package hash
@@ -115,43 +118,75 @@ bool CodePushNativeModule::IsFailedHash(wstring_view packageHash)
 }
 
 /*
-+ (BOOL)isFailedHash:(NSString*)packageHash
-{
-    NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
-    NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
-    if (failedUpdates == nil || packageHash == nil) {
-        return NO;
-    } else {
-        for (NSDictionary *failedPackage in failedUpdates)
-        {
-            // Type check is needed for backwards compatibility, where we used to just store
-            // the failed package hash instead of the metadata. This only impacts "dev"
-            // scenarios, since in production we clear out old information whenever a new
-            // binary is applied.
-            if ([failedPackage isKindOfClass:[NSDictionary class]]) {
-                NSString *failedPackageHash = [failedPackage objectForKey:PackageHashKey];
-                if ([packageHash isEqualToString:failedPackageHash]) {
-                    return YES;
-                }
-            }
-        }
-
-        return NO;
-    }
-}
-*/
-
+ * This method is used to get information about the latest rollback.
+ * This information will be used to decide whether the application
+ * should ignore the update or not.
+ */
 JsonObject CodePushNativeModule::GetRollbackInfo() { return nullptr; }
-//void SetLatestRollbackInfo(wstring packageHash);
-int CodePushNativeModule::GetRollbackCountForPackage(wstring_view packageHash, JsonObject latestRollbackInfo) { return 0; }
 
-bool CodePushNativeModule::IsPendingUpdate(wstring_view packageHash) { return false; }
+/*
+ * This method is used to get the count of rollback for the package
+ * using the latest rollback information.
+ */
+int CodePushNativeModule::GetRollbackCountForPackage(wstring_view packageHash, const JsonObject& latestRollbackInfo) 
+{
+    auto oldPackageHash{ latestRollbackInfo.GetNamedString(LatestRollbackPackageHashKey, L"null") };
+    if (packageHash == oldPackageHash)
+    {
+        auto oldCount{ latestRollbackInfo.GetNamedNumber(LatestRollbackCountKey, 0) };
+        return oldCount;
+    }
+    return 0; 
+}
 
-bool CodePushNativeModule::IsUsingTestConfiguration() { return false; }
-void CodePushNativeModule::SetUsingTestConfiguration() {}
-//void ClearUpdates();
+/*
+ * This method checks to see whether a specific package hash
+ * represents a downloaded and installed update, that hasn't
+ * been applied yet via an app restart.
+ */
+bool CodePushNativeModule::IsPendingUpdate(wstring_view packageHash) 
+{ 
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    auto pendingUpdateData{ localSettings.Values().TryLookup(PendingUpdateKey) };
+    if (pendingUpdateData != nullptr)
+    {
+        auto pendingUpdateString{ unbox_value<hstring>(pendingUpdateData) };
+        JsonObject pendingUpdate;
+        auto success{ JsonObject::TryParse(pendingUpdateString, pendingUpdate) };
+        
+        // If there is a pending update whose "state" isn't loading, then we consider it "pending".
+        // Additionally, if a specific hash was provided, we ensure it matches that of the pending update.
+        auto updateIsPending{ success &&
+            pendingUpdate != nullptr &&
+            pendingUpdate.GetNamedBoolean(PendingUpdateIsLoadingKey, false) == false &&
+            (packageHash.empty() || pendingUpdate.GetNamedString(PendingUpdateHashKey, L"null") == packageHash) };
 
-void CodePushNativeModule::DispatchDownloadProgressEvent() 
+        return updateIsPending;
+    }
+    return false;
+}
+
+/*
+ * This returns a boolean value indicating whether CodePush has
+ * been set to run under a test configuration.
+ */
+bool CodePushNativeModule::IsUsingTestConfiguration() 
+{ 
+    return testConfigurationFlag;
+}
+
+/*
+ * This is used to enable an environment in which tests can be run.
+ * Specifically, it flips a boolean flag that causes bundles to be
+ * saved to a test folder and enables the ability to modify
+ * installed bundles on the fly from JavaScript.
+ */
+void CodePushNativeModule::SetUsingTestConfiguration(bool shouldUseTestConfiguration) 
+{
+    testConfigurationFlag = shouldUseTestConfiguration;
+}
+
+void CodePushNativeModule::DispatchDownloadProgressEvent()
 {
     // Notify the script-side about the progress
     m_context.CallJSFunction(
@@ -165,9 +200,7 @@ void CodePushNativeModule::DispatchDownloadProgressEvent()
 
 void CodePushNativeModule::LoadBundle()
 {
-    m_host.InstanceSettings().UIDispatcher().Post([host = m_host]() {
-        host.ReloadInstance();
-        });
+    m_host.ReloadInstance();
 }
 
 /*
@@ -664,11 +697,21 @@ fire_and_forget CodePushNativeModule::DownloadAndReplaceCurrentBundle(wstring re
  */
 fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJsonValue> promise) noexcept 
 {
-    /*
     if (needToReportRollback)
     {
         needToReportRollback = false;
         // save stuff to LocalSettings
+        /*
+        NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
+        NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
+        if (failedUpdates) {
+            NSDictionary *lastFailedPackage = [failedUpdates lastObject];
+            if (lastFailedPackage) {
+                resolve([CodePushTelemetryManager getRollbackReport:lastFailedPackage]);
+                return;
+            }
+        }
+        */
     }
     else if (m_isFirstRunAfterUpdate)
     {
@@ -678,8 +721,19 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
     }
     else if (isRunningBinaryVersion)
     {
-        auto appVersion{ CodePushConfig::Current().GetAppVersion() };
-        promise.Resolve(CodePushTelemetryManager::GetBinaryUpdateReport(appVersion));
+        auto appVersion{ m_codePushConfig.GetAppVersion() };
+        /*
+        wstring_view appVersionString;
+        if (appVersion.has_value())
+        {
+            appVersionString = appVersion.value();
+        }
+        else
+        {
+            appVersionString = L"";
+        }
+        promise.Resolve(CodePushTelemetryManager::GetBinaryUpdateReport(appVersionString));
+        */
         co_return;
     }
     else
@@ -691,7 +745,6 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
             co_return;
         }
     }
-    */
 
     promise.Resolve(JsonValue::CreateNullValue());
     co_return;
