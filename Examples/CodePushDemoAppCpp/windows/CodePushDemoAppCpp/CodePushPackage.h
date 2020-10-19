@@ -81,7 +81,7 @@ namespace CodePush
 
 		static IAsyncOperation<bool> InstallPackageAsync(JsonObject updatePackage, bool removePendingUpdate);
 
-		static void RollbackPackage();
+		static IAsyncAction RollbackPackage();
 
 		// The below methods are only used during tests.
 		static void ClearUpdates();

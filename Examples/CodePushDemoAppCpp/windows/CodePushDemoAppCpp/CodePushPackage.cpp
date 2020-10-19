@@ -489,6 +489,36 @@ IAsyncOperation<bool> CodePushPackage::InstallPackageAsync(JsonObject updatePack
     co_return co_await UpdateCurrentPackageInfoAsync(info);
 }
 
+IAsyncAction CodePushPackage::RollbackPackage()
+{
+    auto info{ co_await GetCurrentPackageInfoAsync() };
+    if (info == nullptr)
+    {
+        CodePushUtils::Log(L"Error getting current package info.");
+        co_return;
+    }
+
+    auto currentPackageFolder{ co_await GetCurrentPackageFolderAsync() };
+    if (currentPackageFolder == nullptr)
+    {
+        CodePushUtils::Log(L"Error getting package folder path.");
+    }
+
+    try
+    {
+        co_await currentPackageFolder.DeleteAsync();
+    }
+    catch (...)
+    {
+        CodePushUtils::Log(L"Error deleting current package contents.");
+    }
+
+    info.Insert(L"currentPackage", info.TryLookup(L"previousPackage"));
+    info.Remove(L"previousPackage");
+
+    co_await UpdateCurrentPackageInfoAsync(info);
+}
+
 IAsyncOperation<StorageFile> GetStatusFileAsync()
 {
     auto codePushFolder{ co_await GetCodePushFolderAsync() };
