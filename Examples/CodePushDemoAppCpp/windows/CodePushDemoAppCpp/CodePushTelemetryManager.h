@@ -27,12 +27,19 @@ namespace CodePush
 	struct CodePushTelemetryManager
 	{
 	private:
+		static void ClearRetryStatusReport();
+		static wstring_view GetDeploymentKeyFromStatusReportIdentifier(wstring_view statusReportIdentifier);
+		static hstring GetPackageStatusReportIdentifier(const JsonObject& package);
+		static hstring GetPreviousStatusReportIdentifier();
+		static wstring_view GetVersionLabelFromStatusReportIdentifier(wstring_view statusReportIdentifier);
+		static bool IsStatusReportIdentifierCodePushLabel(wstring_view statusReportIdentifier);
+		static void SaveStatusReportedForIdentifier(wstring_view appVersionOrPackageIdentifier);
 	public:
-		static JsonObject GetBinaryUpdateReport(wstring appVersion);
+		static JsonObject GetBinaryUpdateReport(wstring_view appVersion);
 		static JsonObject GetRetryStatusReport();
-		static JsonObject GetRollbackReport(JsonObject lastFailedPackage);
-		static JsonObject GetUpdateReport(JsonObject currentPackage);
-		static void RecordStatusReported(JsonObject statusReport);
-		static void SaveStatusReportForRetry(JsonObject statusReport);
+		static JsonObject GetRollbackReport(const JsonObject& lastFailedPackage);
+		static JsonObject GetUpdateReport(const JsonObject& currentPackage);
+		static void RecordStatusReported(const JsonObject& statusReport);
+		static void SaveStatusReportForRetry(const JsonObject& statusReport);
 	};
 }
