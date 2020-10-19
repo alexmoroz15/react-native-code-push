@@ -79,9 +79,9 @@ namespace CodePush
 		const wstring PackageIsPendingKey{ L"isPending" };
 
 
-		bool isRunningBinaryVersion{ false };
-		bool needToReportRollback{ false };
-		bool testConfigurationFlag{ false };
+		bool m_isRunningBinaryVersion{ false };
+		bool m_needToReportRollback{ false };
+		bool m_testConfigurationFlag{ false };
 
 		// These values are used to save the NS bundle, name, extension and subdirectory
 		// for the JS bundle in the binary.
@@ -103,10 +103,12 @@ namespace CodePush
 		const wstring LatestRollbackCountKey{ L"count" };
 
 		void DispatchDownloadProgressEvent();
-		void LoadBundle();
+		IAsyncAction InitializeUpdateAfterRestart();
+		IAsyncAction LoadBundle();
+		IAsyncAction RollbackPackage();
 		void RemoveFailedUpdates();
 		void RemovePendingUpdate();
-		void RestartAppInternal(bool onlyIfUpdateIsPending);
+		IAsyncAction RestartAppInternal(bool onlyIfUpdateIsPending);
 		void SaveFailedUpdate(JsonObject& failedPackage);
 		void SavePendingUpdate(wstring_view packageHash, bool isLoading);
 
@@ -147,6 +149,7 @@ namespace CodePush
 
 		bool IsUsingTestConfiguration();
 		void SetUsingTestConfiguration(bool shouldUseTestConfiguration);
+		IAsyncAction ClearDebugUpdates();
 
 		REACT_INIT(Initialize);
 		void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;
@@ -208,7 +211,7 @@ namespace CodePush
 		void NotifyApplicationReady(ReactPromise<IJsonValue> promise) noexcept;
 
 		REACT_METHOD(Allow, L"allow");
-		void Allow(ReactPromise<JSValue> promise) noexcept;
+		fire_and_forget Allow(ReactPromise<JSValue> promise) noexcept;
 
 		REACT_METHOD(ClearPendingRestart, L"clearPendingRestart");
 		void ClearPendingRestart() noexcept;
@@ -220,7 +223,7 @@ namespace CodePush
          * This method is the native side of the CodePush.restartApp() method.
          */
 		REACT_METHOD(RestartApp, L"restartApp");
-		void RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue> promise) noexcept;
+		fire_and_forget RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue> promise) noexcept;
 
         /*
          * This method clears CodePush's downloaded updates.

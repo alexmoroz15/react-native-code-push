@@ -134,7 +134,7 @@ int CodePushNativeModule::GetRollbackCountForPackage(wstring_view packageHash, c
     if (packageHash == oldPackageHash)
     {
         auto oldCount{ latestRollbackInfo.GetNamedNumber(LatestRollbackCountKey, 0) };
-        return oldCount;
+        return static_cast<int>(oldCount);
     }
     return 0; 
 }
@@ -172,7 +172,7 @@ bool CodePushNativeModule::IsPendingUpdate(wstring_view packageHash)
  */
 bool CodePushNativeModule::IsUsingTestConfiguration() 
 { 
-    return testConfigurationFlag;
+    return m_testConfigurationFlag;
 }
 
 /*
@@ -183,7 +183,29 @@ bool CodePushNativeModule::IsUsingTestConfiguration()
  */
 void CodePushNativeModule::SetUsingTestConfiguration(bool shouldUseTestConfiguration) 
 {
-    testConfigurationFlag = shouldUseTestConfiguration;
+    m_testConfigurationFlag = shouldUseTestConfiguration;
+}
+
+/*
+ * This method is used to clear updates that are installed
+ * under a different app version and hence don't apply anymore,
+ * during a debug run configuration and when React Native Windows is
+ * running the JS bundle from the dev server.
+ */
+IAsyncAction CodePushNativeModule::ClearDebugUpdates()
+{
+#if (!BUNDLE)
+    auto binaryAppVersion{ m_codePushConfig.GetAppVersion() };
+    auto currentPackageMetadata{ co_await CodePushPackage::GetCurrentPackageAsync() };
+    if (currentPackageMetadata != nullptr)
+    {
+        auto packageAppVersion{ currentPackageMetadata.GetNamedString(AppVersionKey, L"") };
+        if (!binaryAppVersion.has_value() || binaryAppVersion.value() != packageAppVersion)
+        {
+            ClearUpdates();
+        }
+    }
+#endif
 }
 
 void CodePushNativeModule::DispatchDownloadProgressEvent()
@@ -198,9 +220,45 @@ void CodePushNativeModule::DispatchDownloadProgressEvent()
             {"receivedBytes", m_latestReceivedContentLength } });
 }
 
-void CodePushNativeModule::LoadBundle()
+IAsyncAction CodePushNativeModule::LoadBundle()
 {
+    if (IsUsingTestConfiguration() || m_host.InstanceSettings().UseWebDebugger())
+    {
+        auto bundleFile{ co_await GetBundleFileAsync() };
+        //m_host.InstanceSettings().BundleRootPath();
+    }
+    /*
+    if ([CodePush isUsingTestConfiguration] || ![super.bridge.bundleURL.scheme hasPrefix:@"http"]) {
+            [super.bridge setValue:[CodePush bundleURL] forKey:@"bundleURL"];
+        }
+    */
+
     m_host.ReloadInstance();
+}
+
+/*
+ * This method is used when an update has failed installation
+ * and the app needs to be rolled back to the previous bundle.
+ * This method is automatically called when the rollback timer
+ * expires without the app indicating whether the update succeeded,
+ * and therefore, it shouldn't be called directly.
+ */
+IAsyncAction CodePushNativeModule::RollbackPackage()
+{
+    auto failedPackage{ co_await CodePushPackage::GetCurrentPackageAsync() };
+    if (failedPackage == nullptr)
+    {
+        CodePushUtils::Log(L"Attempted to perform a rollback when there is no current update.");
+    }
+    else
+    {
+        SaveFailedUpdate(failedPackage);
+    }
+
+    // Rollback to the previous version and de-register the new update
+    co_await CodePushPackage::RollbackPackage();
+    RemovePendingUpdate();
+    co_await LoadBundle();
 }
 
 /*
@@ -225,7 +283,7 @@ void CodePushNativeModule::RemovePendingUpdate()
     localSettings.Values().TryRemove(PendingUpdateKey);
 }
 
-void CodePushNativeModule::RestartAppInternal(bool onlyIfUpdateIsPending)
+IAsyncAction CodePushNativeModule::RestartAppInternal(bool onlyIfUpdateIsPending)
 {
     if (m_restartInProgress)
     {
@@ -236,15 +294,15 @@ void CodePushNativeModule::RestartAppInternal(bool onlyIfUpdateIsPending)
     {
         CodePushUtils::Log(L"Restart request queued until restarts are re-allowed.");
         m_restartQueue.push_back(onlyIfUpdateIsPending);
-        return;
+        co_return;
     }
 
     m_restartInProgress = true;
     if (!onlyIfUpdateIsPending || IsPendingUpdate(L""))
     {
-        LoadBundle();
+        co_await LoadBundle();
         CodePushUtils::Log(L"Restarting app.");
-        return;
+        co_return;
     }
 
     m_restartInProgress = false;
@@ -252,7 +310,7 @@ void CodePushNativeModule::RestartAppInternal(bool onlyIfUpdateIsPending)
     {
         auto buf{ m_restartQueue[0] };
         m_restartQueue.erase(m_restartQueue.begin());
-        RestartAppInternal(buf);
+        co_await RestartAppInternal(buf);
     }
 }
 
@@ -303,6 +361,8 @@ void CodePushNativeModule::Initialize(ReactContext const& reactContext) noexcept
     m_host = res.as<ReactNativeHost>();
 
     m_codePushConfig = CodePushConfig::Init(reactContext);
+
+    InitializeUpdateAfterRestart();
 }
 
 void CodePushNativeModule::GetConstants(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
@@ -326,11 +386,8 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
     auto binaryBundle{ co_await GetBinaryBundleAsync() };
     if (binaryBundle != nullptr)
     {
-        auto basicProperties{ co_await binaryBundle.GetBasicPropertiesAsync() };
-        auto modifiedDate{ basicProperties.DateModified() };
-        //auto mtime{ modifiedDate.time_since_epoch() / std::chrono::seconds(1) - UNIX_EPOCH_IN_WINRT_SECONDS };
-        auto mtime{ clock::to_time_t(modifiedDate) };
-        updatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(to_hstring(mtime)));
+        auto modifiedDate{ co_await CodePushUpdateUtils::ModifiedDateStringOfFileAsync(binaryBundle) };
+        updatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(modifiedDate));
     }
 
     auto publicKey{ m_codePushConfig.GetPublicKey() };
@@ -384,13 +441,14 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
 fire_and_forget CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
 {
     auto configuration{ m_codePushConfig.GetConfiguration() };
-    if (isRunningBinaryVersion)
+    if (m_isRunningBinaryVersion)
     {
         // isRunningBinaryVersion will not get set to "true" if running against the packager.
         hstring binaryHash;
         try
         {
-            binaryHash = CodePushUpdateUtils::GetHashForBinaryContents(co_await GetBinaryBundleAsync());
+            auto binaryBundle{ co_await GetBinaryBundleAsync() };
+            binaryHash = co_await CodePushUpdateUtils::GetHashForBinaryContents(binaryBundle);
         }
         catch(...)
         {
@@ -448,7 +506,7 @@ fire_and_forget CodePushNativeModule::GetUpdateMetadataAsync(CodePushUpdateState
         // 1) Caller wanted a pending, and there is a pending update
         // 2) Caller wanted the running update, and there isn't a pending
         // 3) Caller wants the latest update, regardless if it's pending or not
-        if (isRunningBinaryVersion) {
+        if (m_isRunningBinaryVersion) {
             // This only matters in Debug builds. Since we do not clear "outdated" updates,
             // we need to indicate to the JS side that somehow we have a current update on
             // disk that is not actually running.
@@ -544,10 +602,49 @@ void CodePushNativeModule::SetLatestRollbackInfo(wstring packageHash) noexcept
     auto currentTimeMillis{ clock::to_time_t(clock::now()) * 1000 };
 
     latestRollbackInfo.Insert(LatestRollbackCountKey, JsonValue::CreateNumberValue(count));
-    latestRollbackInfo.Insert(LatestRollbackTimeKey, JsonValue::CreateNumberValue(currentTimeMillis));
+    latestRollbackInfo.Insert(LatestRollbackTimeKey, JsonValue::CreateNumberValue(static_cast<double>(currentTimeMillis)));
     latestRollbackInfo.Insert(LatestRollbackPackageHashKey, JsonValue::CreateStringValue(packageHash));
 
     localSettings.Values().Insert(LatestRollbackInfoKey, box_value(latestRollbackInfo.Stringify()));
+}
+
+/*
+ * This method is used when the app is started to either
+ * initialize a pending update or rollback a faulty update
+ * to the previous version.
+ */
+IAsyncAction CodePushNativeModule::InitializeUpdateAfterRestart()
+{
+#if _DEBUG
+    co_await ClearDebugUpdates();
+#endif
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    auto pendingUpdateData{ localSettings.Values().TryLookup(PendingUpdateKey) };
+    if (pendingUpdateData != nullptr)
+    {
+        auto pendingUpdateString{ unbox_value<hstring>(pendingUpdateData) };
+        JsonObject pendingUpdate;
+        auto success{ JsonObject::TryParse(pendingUpdateString, pendingUpdate) };
+        if (success)
+        {
+            m_isFirstRunAfterUpdate = true;
+            auto updateIsLoading{ pendingUpdate.GetNamedBoolean(PendingUpdateIsLoadingKey, false) };
+            if (updateIsLoading)
+            {
+                // Pending update was initialized, but notifyApplicationReady was not called.
+                // Therefore, deduce that it is a broken update and rollback.
+                CodePushUtils::Log(L"Update did not finish loading the last time, rolling back to a previous version.");
+                m_needToReportRollback = true;
+                co_await RollbackPackage();
+            }
+            else
+            {
+                // Mark that we tried to initialize the new update, so that if it crashes,
+                // we will know that we need to rollback when the app next starts.
+                SavePendingUpdate(pendingUpdate.GetNamedString(PendingUpdateHashKey, L""), true);
+            }
+        }
+    }
 }
 
 /*
@@ -594,7 +691,7 @@ void CodePushNativeModule::NotifyApplicationReady(ReactPromise<IJsonValue> promi
     promise.Resolve(JsonValue::CreateNullValue());
 }
 
-void CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept 
+fire_and_forget CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept 
 {
     CodePushUtils::Log(L"Re-allowing restarts.");
     m_allowed = true;
@@ -604,7 +701,7 @@ void CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept
         CodePushUtils::Log(L"Executing pending restart.");
         auto buf{ m_restartQueue[0] };
         m_restartQueue.erase(m_restartQueue.begin());
-        RestartAppInternal(buf);
+        co_await RestartAppInternal(buf);
     }
 
     promise.Resolve(JSValue::Null);
@@ -625,9 +722,9 @@ void CodePushNativeModule::Disallow(ReactPromise<JSValue> promise) noexcept
 /*
  * This method is the native side of the CodePush.restartApp() method.
  */
-void CodePushNativeModule::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue> promise) noexcept 
+fire_and_forget CodePushNativeModule::RestartApp(bool onlyIfUpdateIsPending, ReactPromise<JSValue> promise) noexcept 
 {
-    RestartAppInternal(onlyIfUpdateIsPending);
+    co_await RestartAppInternal(onlyIfUpdateIsPending);
     promise.Resolve(JSValue::Null);
 }
 
@@ -666,9 +763,9 @@ fire_and_forget CodePushNativeModule::DownloadAndReplaceCurrentBundle(wstring re
  */
 fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJsonValue> promise) noexcept 
 {
-    if (needToReportRollback)
+    if (m_needToReportRollback)
     {
-        needToReportRollback = false;
+        m_needToReportRollback = false;
         auto localSettings{ ApplicationData::Current().LocalSettings() };
         auto failedUpdatesData{ localSettings.Values().TryLookup(FailedUpdatesKey) };
         if (failedUpdatesData != nullptr)
@@ -693,7 +790,7 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
         promise.Resolve(CodePushTelemetryManager::GetUpdateReport(currentPackage));
         co_return;
     }
-    else if (isRunningBinaryVersion)
+    else if (m_isRunningBinaryVersion)
     {
         auto appVersion{ m_codePushConfig.GetAppVersion() };
         wstring_view appVersionString{ appVersion.has_value() ? appVersion.value() : L"" };
