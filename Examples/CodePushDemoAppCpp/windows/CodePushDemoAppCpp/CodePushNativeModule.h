@@ -167,7 +167,7 @@ namespace CodePush
          * app version, as well as the deployment key that was configured in the Info.plist file.
          */
 		REACT_METHOD(GetConfiguration, L"getConfiguration");
-		void GetConfiguration(ReactPromise<IJsonValue> promise) noexcept;
+		fire_and_forget GetConfiguration(ReactPromise<IJsonValue> promise) noexcept;
 
         /*
          * This method is the native side of the CodePush.getUpdateMetadata method.

@@ -381,70 +381,39 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
  * internally only by the CodePush.checkForUpdate method in order to get the
  * app version, as well as the deployment key that was configured in the Info.plist file.
  */
-void CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
+fire_and_forget CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
 {
     auto configuration{ m_codePushConfig.GetConfiguration() };
     if (isRunningBinaryVersion)
     {
-        /*
-        // isRunningBinaryVersion will not get set to "YES" if running against the packager.
-        NSString* binaryHash = [CodePushUpdateUtils getHashForBinaryContents : [CodePush binaryBundleURL] error : &error];
-        if (error) {
-            CPLog(@"Error obtaining hash for binary contents: %@", error);
-            resolve(configuration);
-            return;
+        // isRunningBinaryVersion will not get set to "true" if running against the packager.
+        hstring binaryHash;
+        try
+        {
+            binaryHash = CodePushUpdateUtils::GetHashForBinaryContents(co_await GetBinaryBundleAsync());
+        }
+        catch(...)
+        {
+            CodePushUtils::Log(L"Error obtaining hash for binary contents.");
+            promise.Resolve(configuration);
+            co_return;
         }
 
-        if (binaryHash == nil) {
+        if (binaryHash.empty())
+        {
             // The hash was not generated either due to a previous unknown error or the fact that
             // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
             // builds.
-            resolve(configuration);
-            return;
+            promise.Resolve(configuration);
+            co_return;
         }
 
-        NSMutableDictionary* mutableConfiguration = [configuration mutableCopy];
-        [mutableConfiguration setObject : binaryHash forKey : PackageHashKey] ;
-        resolve(mutableConfiguration);
-        return;
-        */
-        // ...
+        configuration.Insert(PackageHashKey, JsonValue::CreateStringValue(binaryHash));
+        promise.Resolve(configuration);
+        co_return;
     }
     promise.Resolve(configuration);
 }
-
-/*
-RCT_EXPORT_METHOD(getConfiguration:(RCTPromiseResolveBlock)resolve
-                          rejecter:(RCTPromiseRejectBlock)reject)
-{
-    NSDictionary *configuration = [[CodePushConfig current] configuration];
-    NSError *error;
-    if (isRunningBinaryVersion) {
-        // isRunningBinaryVersion will not get set to "YES" if running against the packager.
-        NSString *binaryHash = [CodePushUpdateUtils getHashForBinaryContents:[CodePush binaryBundleURL] error:&error];
-        if (error) {
-            CPLog(@"Error obtaining hash for binary contents: %@", error);
-            resolve(configuration);
-            return;
-        }
-
-        if (binaryHash == nil) {
-            // The hash was not generated either due to a previous unknown error or the fact that
-            // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
-            // builds.
-            resolve(configuration);
-            return;
-        }
-
-        NSMutableDictionary *mutableConfiguration = [configuration mutableCopy];
-        [mutableConfiguration setObject:binaryHash forKey:PackageHashKey];
-        resolve(mutableConfiguration);
-        return;
-    }
-
-    resolve(configuration);
-}
-*/
 
 /*
  * This method is the native side of the CodePush.getUpdateMetadata method.
@@ -700,18 +669,23 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
     if (needToReportRollback)
     {
         needToReportRollback = false;
-        // save stuff to LocalSettings
-        /*
-        NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
-        NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
-        if (failedUpdates) {
-            NSDictionary *lastFailedPackage = [failedUpdates lastObject];
-            if (lastFailedPackage) {
-                resolve([CodePushTelemetryManager getRollbackReport:lastFailedPackage]);
-                return;
+        auto localSettings{ ApplicationData::Current().LocalSettings() };
+        auto failedUpdatesData{ localSettings.Values().TryLookup(FailedUpdatesKey) };
+        if (failedUpdatesData != nullptr)
+        {
+            auto failedUpdatesString{ unbox_value<hstring>(failedUpdatesData) };
+            JsonArray failedUpdates;
+            auto success{ JsonArray::TryParse(failedUpdatesString, failedUpdates) };
+            if (success)
+            {
+                auto lastFailedPackage{ failedUpdates.GetObjectAt(failedUpdates.Size() - 1) };
+                if (lastFailedPackage != nullptr)
+                {
+                    promise.Resolve(CodePushTelemetryManager::GetRollbackReport(lastFailedPackage));
+                    co_return;
+                }
             }
         }
-        */
     }
     else if (m_isFirstRunAfterUpdate)
     {
@@ -722,18 +696,8 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
     else if (isRunningBinaryVersion)
     {
         auto appVersion{ m_codePushConfig.GetAppVersion() };
-        /*
-        wstring_view appVersionString;
-        if (appVersion.has_value())
-        {
-            appVersionString = appVersion.value();
-        }
-        else
-        {
-            appVersionString = L"";
-        }
+        wstring_view appVersionString{ appVersion.has_value() ? appVersion.value() : L"" };
         promise.Resolve(CodePushTelemetryManager::GetBinaryUpdateReport(appVersionString));
-        */
         co_return;
     }
     else
@@ -749,44 +713,6 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
     promise.Resolve(JsonValue::CreateNullValue());
     co_return;
 }
-
-/*
-RCT_EXPORT_METHOD(getNewStatusReport:(RCTPromiseResolveBlock)resolve
-                            rejecter:(RCTPromiseRejectBlock)reject)
-{
-    if (needToReportRollback) {
-        needToReportRollback = NO;
-        NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
-        NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
-        if (failedUpdates) {
-            NSDictionary *lastFailedPackage = [failedUpdates lastObject];
-            if (lastFailedPackage) {
-                resolve([CodePushTelemetryManager getRollbackReport:lastFailedPackage]);
-                return;
-            }
-        }
-    } else if (_isFirstRunAfterUpdate) {
-        NSError *error;
-        NSDictionary *currentPackage = [CodePushPackage getCurrentPackage:&error];
-        if (!error && currentPackage) {
-            resolve([CodePushTelemetryManager getUpdateReport:currentPackage]);
-            return;
-        }
-    } else if (isRunningBinaryVersion) {
-        NSString *appVersion = [[CodePushConfig current] appVersion];
-        resolve([CodePushTelemetryManager getBinaryUpdateReport:appVersion]);
-        return;
-    } else {
-        NSDictionary *retryStatusReport = [CodePushTelemetryManager getRetryStatusReport];
-        if (retryStatusReport) {
-            resolve(retryStatusReport);
-            return;
-        }
-    }
-
-    resolve(nil);
-}
-*/
 
 void CodePushNativeModule::RecordStatusReported(JsonObject statusReport) noexcept 
 {
