@@ -149,6 +149,7 @@
     <ClCompile Include="CodePushNativeModule.cpp" />
     <ClCompile Include="CodePushConfig.cpp" />
     <ClCompile Include="CodePushPackage.cpp" />
+    <ClCompile Include="CodePushTelemetryManager.cpp" />
     <ClCompile Include="CodePushUpdateUtils.cpp" />
     <ClCompile Include="CodePushUtils.cpp" />
     <ClCompile Include="FileUtils.cpp" />

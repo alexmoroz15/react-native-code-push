@@ -36,6 +36,9 @@
     <ClCompile Include="FileUtils.cpp">
       <Filter>CodePush</Filter>
     </ClCompile>
+    <ClCompile Include="CodePushTelemetryManager.cpp">
+      <Filter>CodePush</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
