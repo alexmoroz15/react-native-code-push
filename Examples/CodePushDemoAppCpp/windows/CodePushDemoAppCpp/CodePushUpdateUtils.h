@@ -1,6 +1,7 @@
 #pragma once
 
 #include "winrt/Windows.Data.Json.h"
+#include "winrt/Windows.Foundation.h"
 #include "winrt/Windows.Storage.h"
 #include <string>
 #include <filesystem>
@@ -49,8 +50,9 @@
 namespace CodePush
 {
     using namespace winrt;
-    using namespace Windows::Storage;
     using namespace Windows::Data::Json;
+    using namespace Windows::Foundation;
+    using namespace Windows::Storage;
 
     using namespace std;
     using namespace filesystem;
@@ -58,13 +60,23 @@ namespace CodePush
     struct CodePushUpdateUtils
     {
     private:
+        inline static const wstring_view AssetsFolderName{ L"assets" };
+        inline static const wstring_view BinaryHashKey{ L"CodePushBinaryHash" };
+        inline static const wstring_view ManifestFolderPrefix{ L"CodePush" };
+        inline static const wstring_view BundleJWTFile{ L".codepushrelease" };
+
+        /*
+         Ignore list for hashing
+         */
+        inline static const wstring_view IgnoreMacOSX{ L"__MACOSX/" };
+        inline static const wstring_view IgnoreDSStore{ L".DS_Store" };
+        inline static const wstring_view IgnoreCodePushMetadata{ L".codepushrelease" };
+
     public:
         static bool CopyEntriesInFolder(StorageFolder& sourceFolder, StorageFolder& destFolder);
         static StorageFile FildMainBundleInFolder(StorageFolder& folderPath, const wstring& expectedFileName);
-        static wstring AssetsFolderName();
-        static wstring GetHashForBinaryContents(StorageFile& binaryBundle);
-        static wstring ManifestFolderPrefix();
-        static wstring ModifiedDateStringOfFileAtPath(path fileUrl);
+        static IAsyncOperation<hstring> GetHashForBinaryContents(const StorageFile& binaryBundle);
+        static IAsyncOperation<hstring> ModifiedDateStringOfFileAsync(const StorageFile& file);
         static bool IsHashIgnoredFor(path relativePath);
         static bool VerifyFolderHash(StorageFolder& finalUpdateFolder, const wstring& expectedHash);
 
