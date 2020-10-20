@@ -55,8 +55,124 @@ IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryBundleAsync()
 
 IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync()
 { 
-    co_return nullptr; 
+    //EnsureBinaryBundleExists();
+    auto packageBundle{ co_await CodePushPackage::GetCurrentPackageBundleAsync() };
+    auto binaryBundle{ co_await GetBinaryBundleAsync() };
+
+    if (packageBundle == nullptr)
+    {
+        CodePushUtils::Log(L"Loading bundle from: ");
+        //m_isRunningBinaryVersion = true;
+        co_return binaryBundle;
+    }
+
+    //auto binaryAppVersion{ m_codePushConfig.GetAppVersion() };
+    auto binaryAppVersion{ L"" };
+    auto currentPackageMetadata{ co_await CodePushPackage::GetCurrentPackageAsync() };
+    if (currentPackageMetadata == nullptr);
+    {
+        CodePushUtils::Log(L"Loading bundle from: ");
+        //m_isRunningBinaryVersion = true;
+        co_return binaryBundle;
+    }
+
+    auto packageDate{ currentPackageMetadata.GetNamedString(BinaryBundleDateKey, L"") };
+    auto packageAppVersion{ currentPackageMetadata.GetNamedString(AppVersionKey, L"") };
+
+    if ((co_await CodePushUpdateUtils::ModifiedDateStringOfFileAsync(binaryBundle)) == packageDate && (/*m_isUsingTestConfiguration*/ false || binaryAppVersion == packageAppVersion))
+    {
+        // Return package file because it is newer than the app store binary's JS bundle
+        CodePushUtils::Log(L"Loading bundle from: ");
+        //m_isRunningBinaryVersion = false;
+        co_return packageBundle;
+    }
+    else
+    {    
+#if _DEBUG
+        bool isRelease{ false };
+#else
+        bool isRelease{ true };
+#endif
+
+        if (isRelease || binaryAppVersion != packageAppVersion)
+        {
+            //ClearUpdates()
+        }
+
+        CodePushUtils::Log(L"Loading bundle from: ");
+        //m_isRunningBinaryVersion = true;
+        co_return binaryBundle;
+    }
 }
+
+/*
++ (NSURL*)bundleURL
+{
+    return[self bundleURLForResource : bundleResourceName
+        withExtension : bundleResourceExtension
+        subdirectory : bundleResourceSubdirectory
+        bundle : bundleResourceBundle];
+}
+*/
+/*
++(NSURL*)bundleURLForResource:(NSString*)resourceName
+withExtension : (NSString*)resourceExtension
+subdirectory : (NSString*)resourceSubdirectory
+bundle : (NSBundle*)resourceBundle
+{
+    bundleResourceName = resourceName;
+    bundleResourceExtension = resourceExtension;
+    bundleResourceSubdirectory = resourceSubdirectory;
+    bundleResourceBundle = resourceBundle;
+
+    [self ensureBinaryBundleExists] ;
+
+    NSString* logMessageFormat = @"Loading JS bundle from %@";
+
+    NSError* error;
+    NSString* packageFile = [CodePushPackage getCurrentPackageBundlePath : &error];
+    NSURL* binaryBundleURL = [self binaryBundleURL];
+
+    if (error || !packageFile) {
+        CPLog(logMessageFormat, binaryBundleURL);
+        isRunningBinaryVersion = YES;
+        return binaryBundleURL;
+    }
+
+    NSString* binaryAppVersion = [[CodePushConfig current]appVersion];
+    NSDictionary* currentPackageMetadata = [CodePushPackage getCurrentPackage : &error];
+    if (error || !currentPackageMetadata) {
+        CPLog(logMessageFormat, binaryBundleURL);
+        isRunningBinaryVersion = YES;
+        return binaryBundleURL;
+    }
+
+    NSString* packageDate = [currentPackageMetadata objectForKey : BinaryBundleDateKey];
+    NSString* packageAppVersion = [currentPackageMetadata objectForKey : AppVersionKey];
+
+    if ([[CodePushUpdateUtils modifiedDateStringOfFileAtURL : binaryBundleURL]isEqualToString:packageDate] && ([CodePush isUsingTestConfiguration] || [binaryAppVersion isEqualToString : packageAppVersion])) {
+        // Return package file because it is newer than the app store binary's JS bundle
+        NSURL* packageUrl = [[NSURL alloc]initFileURLWithPath:packageFile];
+        CPLog(logMessageFormat, packageUrl);
+        isRunningBinaryVersion = NO;
+        return packageUrl;
+    }
+    else {
+        BOOL isRelease = NO;
+#ifndef DEBUG
+        isRelease = YES;
+#endif
+
+        if (isRelease || ![binaryAppVersion isEqualToString : packageAppVersion]) {
+            [CodePush clearUpdates] ;
+        }
+
+        CPLog(logMessageFormat, binaryBundleURL);
+        isRunningBinaryVersion = YES;
+        return binaryBundleURL;
+    }
+}
+*/
 
 // Rather than store files in the library files, CodePush for ReactNativeWindows will use AppData folders.
 StorageFolder CodePushNativeModule::GetLocalStorageFolder()
@@ -222,7 +338,7 @@ void CodePushNativeModule::DispatchDownloadProgressEvent()
 
 IAsyncAction CodePushNativeModule::LoadBundle()
 {
-    if (IsUsingTestConfiguration() || m_host.InstanceSettings().UseWebDebugger())
+    if (IsUsingTestConfiguration() || !m_host.InstanceSettings().UseWebDebugger())
     {
         auto bundleFile{ co_await GetBundleFileAsync() };
         //m_host.InstanceSettings().BundleRootPath();
@@ -691,7 +807,7 @@ void CodePushNativeModule::NotifyApplicationReady(ReactPromise<IJsonValue> promi
     promise.Resolve(JsonValue::CreateNullValue());
 }
 
-fire_and_forget CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept 
+void CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexcept 
 {
     CodePushUtils::Log(L"Re-allowing restarts.");
     m_allowed = true;
@@ -701,7 +817,7 @@ fire_and_forget CodePushNativeModule::Allow(ReactPromise<JSValue> promise) noexc
         CodePushUtils::Log(L"Executing pending restart.");
         auto buf{ m_restartQueue[0] };
         m_restartQueue.erase(m_restartQueue.begin());
-        co_await RestartAppInternal(buf);
+        RestartAppInternal(buf);
     }
 
     promise.Resolve(JSValue::Null);
@@ -787,8 +903,11 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
     else if (m_isFirstRunAfterUpdate)
     {
         auto currentPackage = co_await CodePushPackage::GetCurrentPackageAsync();
-        promise.Resolve(CodePushTelemetryManager::GetUpdateReport(currentPackage));
-        co_return;
+        if (currentPackage != nullptr)
+        {
+            promise.Resolve(CodePushTelemetryManager::GetUpdateReport(currentPackage));
+            co_return;
+        }
     }
     else if (m_isRunningBinaryVersion)
     {
@@ -828,37 +947,44 @@ namespace winrt::Microsoft::ReactNative
 
     void WriteValue(IJSValueWriter const& writer, IJsonValue const& value) noexcept
     {
-        switch (value.ValueType())
+        if (value == nullptr)
         {
-        case JsonValueType::Object:
-            writer.WriteObjectBegin();
-            for (const auto& pair : value.GetObject())
-            {
-                writer.WritePropertyName(pair.Key());
-                WriteValue(writer, pair.Value());
-            }
-            writer.WriteObjectEnd();
-            break;
-        case JsonValueType::Array:
-            writer.WriteArrayBegin();
-            for (const auto& elem : value.GetArray())
-            {
-                WriteValue(writer, elem);
-            }
-            writer.WriteArrayEnd();
-            break;
-        case JsonValueType::Boolean:
-            writer.WriteBoolean(value.GetBoolean());
-            break;
-        case JsonValueType::Number:
-            writer.WriteDouble(value.GetNumber());
-            break;
-        case JsonValueType::String:
-            writer.WriteString(value.GetString());
-            break;
-        case JsonValueType::Null:
             writer.WriteNull();
-            break;
+        }
+        else
+        {
+            switch (value.ValueType())
+            {
+            case JsonValueType::Object:
+                writer.WriteObjectBegin();
+                for (const auto& pair : value.GetObject())
+                {
+                    writer.WritePropertyName(pair.Key());
+                    WriteValue(writer, pair.Value());
+                }
+                writer.WriteObjectEnd();
+                break;
+            case JsonValueType::Array:
+                writer.WriteArrayBegin();
+                for (const auto& elem : value.GetArray())
+                {
+                    WriteValue(writer, elem);
+                }
+                writer.WriteArrayEnd();
+                break;
+            case JsonValueType::Boolean:
+                writer.WriteBoolean(value.GetBoolean());
+                break;
+            case JsonValueType::Number:
+                writer.WriteDouble(value.GetNumber());
+                break;
+            case JsonValueType::String:
+                writer.WriteString(value.GetString());
+                break;
+            case JsonValueType::Null:
+                writer.WriteNull();
+                break;
+            }
         }
     }
 

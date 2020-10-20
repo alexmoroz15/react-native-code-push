@@ -55,28 +55,27 @@ namespace CodePush
 
 
 		// These constants represent emitted events
-		const wstring DownloadProgressEvent{ L"CodePushDownloadProgress" };
+		inline static const wstring_view DownloadProgressEvent{ L"CodePushDownloadProgress" };
 
 		// These constants represent valid deployment statuses
-		const wstring DeploymentFailed{ L"DeploymentFailed" };
-		const wstring DeploymentSucceeded{ L"DeploymentSucceeded" };
+		inline static const wstring_view DeploymentFailed{ L"DeploymentFailed" };
+		inline static const wstring_view DeploymentSucceeded{ L"DeploymentSucceeded" };
 
-		// These keys represent the names we use to store data in NSUserDefaults
-		// For Windows, NSUserDefaults is replaced with LocalSettings
-		const wstring FailedUpdatesKey{ L"CODE_PUSH_FAILED_UPDATES" };
-		const wstring PendingUpdateKey{ L"CODE_PUSH_PENDING_UPDATE" };
+		// These keys represent the names we use to store data in LocalSettings
+		inline static const wstring_view FailedUpdatesKey{ L"CODE_PUSH_FAILED_UPDATES" };
+		inline static const wstring_view PendingUpdateKey{ L"CODE_PUSH_PENDING_UPDATE" };
 
 		// These keys are already "namespaced" by the PendingUpdateKey, so
 		// their values don't need to be obfuscated to prevent collision with app data
-		const wstring PendingUpdateHashKey{ L"hash" };
-		const wstring PendingUpdateIsLoadingKey{ L"isLoading" };
+		inline static const wstring_view PendingUpdateHashKey{ L"hash" };
+		inline static const wstring_view PendingUpdateIsLoadingKey{ L"isLoading" };
 
 		// These keys are used to inspect/augment the metadata
 		// that is associated with an update's package.
-		const wstring AppVersionKey{ L"appVersion" };
-		const wstring BinaryBundleDateKey{ L"binaryDate" }; // The date of the BUILD -> the modified date of the executable
-		const wstring PackageHashKey{ L"packageHash" };
-		const wstring PackageIsPendingKey{ L"isPending" };
+		inline static const wstring_view AppVersionKey{ L"appVersion" };
+		inline static const wstring_view BinaryBundleDateKey{ L"binaryDate" }; // The date of the BUILD -> the modified date of the executable
+		inline static const wstring_view PackageHashKey{ L"packageHash" };
+		inline static const wstring_view PackageIsPendingKey{ L"isPending" };
 
 
 		bool m_isRunningBinaryVersion{ false };
@@ -211,7 +210,7 @@ namespace CodePush
 		void NotifyApplicationReady(ReactPromise<IJsonValue> promise) noexcept;
 
 		REACT_METHOD(Allow, L"allow");
-		fire_and_forget Allow(ReactPromise<JSValue> promise) noexcept;
+		void Allow(ReactPromise<JSValue> promise) noexcept;
 
 		REACT_METHOD(ClearPendingRestart, L"clearPendingRestart");
 		void ClearPendingRestart() noexcept;
