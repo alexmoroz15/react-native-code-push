@@ -52,6 +52,7 @@ namespace CodePush
 	struct CodePushPackage
 	{
 	private:
+
 	public:
 		inline static const wstring DiffManifestFileName{ L"hotcodepush.json" };
 		inline static const wstring DownloadFileName{ L"download.zip" };
@@ -71,8 +72,8 @@ namespace CodePush
 
 		static IAsyncOperation<JsonObject> GetCurrentPackageAsync();
 		static IAsyncOperation<JsonObject> GetPreviousPackageAsync();
-		static IAsyncOperation<path> GetCurrentPackageFolderPathAsync();
-		static IAsyncOperation<path> GetCurrentPackageBundlePathAsync();
+		static IAsyncOperation<StorageFolder> GetCurrentPackageFolderAsync();
+		static IAsyncOperation<StorageFile> GetCurrentPackageBundleAsync();
 		static IAsyncOperation<hstring> GetCurrentPackageHashAsync();
 
 		static IAsyncOperation<JsonObject> GetPackageAsync(wstring_view packageHash);

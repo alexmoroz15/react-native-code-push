@@ -327,6 +327,92 @@ IAsyncOperation<JsonObject> CodePushPackage::GetCurrentPackageAsync()
 	co_return co_await GetPackageAsync(packageHash);
 }
 
+
+IAsyncOperation<StorageFile> CodePushPackage::GetCurrentPackageBundleAsync()
+{
+    auto packageFolder{ co_await GetCurrentPackageFolderAsync() };
+    if (packageFolder == nullptr)
+    {
+        co_return nullptr;
+    }
+
+    auto currentPackage{ co_await GetCurrentPackageAsync() };
+    if (currentPackage == nullptr)
+    {
+        co_return nullptr;
+    }
+
+    auto relativeBundlePath{ currentPackage.GetNamedString(RelativeBundlePathKey, L"") };
+    if (!relativeBundlePath.empty())
+    {
+        co_return co_await FileUtils::GetFileAtPathAsync(packageFolder, wstring_view(relativeBundlePath));
+    }
+
+    co_return nullptr;
+}
+
+/*
++ (NSString *)getCurrentPackageBundlePath:(NSError **)error
+{
+    NSString *packageFolder = [self getCurrentPackageFolderPath:error];
+
+    if (!packageFolder) {
+        return nil;
+    }
+
+    NSDictionary *currentPackage = [self getCurrentPackage:error];
+
+    if (!currentPackage) {
+        return nil;
+    }
+
+    NSString *relativeBundlePath = [currentPackage objectForKey:RelativeBundlePathKey];
+    if (relativeBundlePath) {
+        return [packageFolder stringByAppendingPathComponent:relativeBundlePath];
+    } else {
+        return [packageFolder stringByAppendingPathComponent:UpdateBundleFileName];
+    }
+}
+*/
+
+IAsyncOperation<StorageFolder> CodePushPackage::GetCurrentPackageFolderAsync()
+{
+    auto info{ co_await GetCurrentPackageInfoAsync() };
+    if (info == nullptr)
+    {
+        return nullptr;
+    }
+
+    auto packageHash{ info.GetNamedString(L"currentPackage", L"") };
+    if (packageHash.empty())
+    {
+        return nullptr;
+    }
+
+    auto codePushFolder{ co_await GetCodePushFolderAsync() };
+    auto packageFolder{ (co_await codePushFolder.TryGetItemAsync(packageHash)).try_as<StorageFolder>() };
+    co_return packageFolder;
+}
+
+/*
++ (NSString*)getCurrentPackageFolderPath:(NSError**)error
+{
+    NSDictionary* info = [self getCurrentPackageInfo : error];
+
+    if (!info) {
+        return nil;
+    }
+
+    NSString* packageHash = info[@"currentPackage"];
+
+    if (!packageHash) {
+        return nil;
+    }
+
+    return[self getPackageFolderPath : packageHash];
+}
+*/
+
 IAsyncOperation<hstring> CodePushPackage::GetCurrentPackageHashAsync()
 {
     auto info{ co_await GetCurrentPackageInfoAsync() };
