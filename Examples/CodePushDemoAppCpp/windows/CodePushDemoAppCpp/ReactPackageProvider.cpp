@@ -2,7 +2,6 @@
 #include "ReactPackageProvider.h"
 #include "NativeModules.h"
 
-#include "CodePush.h"
 
 using namespace winrt::Microsoft::ReactNative;
 

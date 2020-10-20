@@ -2,15 +2,18 @@
 
 #include "App.xaml.g.h"
 
-//extern winrt::Microsoft::ReactNative::ReactInstanceSettings g_instanceSettings;
-//extern winrt::Microsoft::ReactNative::IReactContext g_reactContext;
-extern winrt::Microsoft::ReactNative::ReactNativeHost g_host;
+namespace activation = winrt::Windows::ApplicationModel::Activation;
 
 namespace winrt::CodePushDemoAppCpp::implementation
 {
     struct App : AppT<App>
     {
         App() noexcept;
+        void OnLaunched(activation::LaunchActivatedEventArgs const&);
+        void OnSuspending(IInspectable const&, Windows::ApplicationModel::SuspendingEventArgs const&);
+        void OnNavigationFailed(IInspectable const&, Windows::UI::Xaml::Navigation::NavigationFailedEventArgs const&);
+      private:
+        using super = AppT<App>;
     };
 } // namespace winrt::CodePushDemoAppCpp::implementation
 
