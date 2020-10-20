@@ -3,7 +3,10 @@
 #include "winrt/Windows.Data.Json.h"
 #include "winrt/Windows.Foundation.h"
 #include "winrt/Windows.Storage.h"
+#include "winrt/Windows.Storage.Streams.h"
+
 #include <string>
+#include <string_view>
 #include <filesystem>
 
 /*
@@ -53,6 +56,7 @@ namespace CodePush
     using namespace Windows::Data::Json;
     using namespace Windows::Foundation;
     using namespace Windows::Storage;
+    using namespace Windows::Storage::Streams;
 
     using namespace std;
     using namespace filesystem;
@@ -71,6 +75,12 @@ namespace CodePush
         inline static const wstring_view IgnoreMacOSX{ L"__MACOSX/" };
         inline static const wstring_view IgnoreDSStore{ L".DS_Store" };
         inline static const wstring_view IgnoreCodePushMetadata{ L".codepushrelease" };
+
+        static bool IsHashIgnoredFor(wstring_view relativePath);
+        static IAsyncOperation<bool> AddContentsOfFolderToManifestAsync(const StorageFolder& folder, wstring_view pathPrefix, JsonArray& manifest);
+        static IAsyncAction AddFileToManifest(const StorageFile& file, JsonArray& manifest);
+        static hstring ComputeFinalHashFromManifest(const JsonArray& manifest);
+        static hstring ComputeHashForData(const IBuffer& inputData);
 
     public:
         static bool CopyEntriesInFolder(StorageFolder& sourceFolder, StorageFolder& destFolder);
