@@ -11,6 +11,9 @@
 
 #include <string_view>
 
+#include "CodePushNativeModule.h"
+#include "CodePushConfig.h"
+
 
 using namespace winrt::CodePushDemoAppCpp;
 using namespace winrt::CodePushDemoAppCpp::implementation;
@@ -34,7 +37,7 @@ using namespace std;
 /// </summary>
 App::App() noexcept
 {
-//#if BUNDLE
+#if BUNDLE
 
     //InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
 
@@ -45,17 +48,17 @@ App::App() noexcept
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
     InstanceSettings().UseFastRefresh(false);
-/*#else
+#else
     JavaScriptMainModuleName(L"index");
     InstanceSettings().UseWebDebugger(true);
     InstanceSettings().UseFastRefresh(true);
-#endif*/
+#endif
 
-/*#if _DEBUG
+#if _DEBUG
     InstanceSettings().UseDeveloperSupport(true);
-#else*/
+#else
     InstanceSettings().UseDeveloperSupport(false);
-//#endif
+#endif
 
     RegisterAutolinkedNativeModulePackages(PackageProviders()); // Includes any autolinked modules
 
@@ -67,7 +70,14 @@ App::App() noexcept
     configMap.Insert(L"appVersion", L"1.0.0");
     configMap.Insert(L"deploymentKey", L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS");
     configMap.Insert(L"serverUrl", L"https://codepush.appcenter.ms/");
-    InstanceSettings().Properties().Set(ReactPropertyBagHelper::GetName(nullptr, L"Configuration"), configMap);
+    CodePush::CodePushConfig::Init(configMap);
+
+    /*
+    auto bundleFile{ co_await CodePush::CodePushNativeModule::GetBundleFileAsync().get() };
+    wstring_view bundlePath{ bundleFile.Path() };
+    hstring bundleRootPath{ bundlePath.substr(0, bundlePath.rfind('\\')) };
+    InstanceSettings().BundleRootPath(bundleRootPath);
+    */
     
     InitializeComponent();
 }
