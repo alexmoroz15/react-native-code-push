@@ -39,22 +39,6 @@ App::App() noexcept
 {
 //#if BUNDLE
 
-    //InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
-
-    /*
-    auto localSettings{ ApplicationData::Current().LocalSettings() };
-    localSettings.Values().Remove(L"currentPackageFolderPath");
-    */
-
-    auto localSettings{ ApplicationData::Current().LocalSettings() };
-    auto bundleRootPathData{ localSettings.Values().TryLookup(L"bundleRootPath") };
-    if (bundleRootPathData != nullptr)
-    {
-        auto bundleRootPath{ unbox_value<hstring>(bundleRootPathData) };
-        InstanceSettings().BundleRootPath(bundleRootPath);
-    }
-
-
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
     InstanceSettings().UseFastRefresh(false);
@@ -82,6 +66,7 @@ App::App() noexcept
     configMap.Insert(L"serverUrl", L"https://codepush.appcenter.ms/");
     CodePush::CodePushConfig::Init(configMap);
 
+    CodePush::CodePushNativeModule::GetBundleFileAsync();
     /*
     auto bundleFile{ co_await CodePush::CodePushNativeModule::GetBundleFileAsync().get() };
     wstring_view bundlePath{ bundleFile.Path() };

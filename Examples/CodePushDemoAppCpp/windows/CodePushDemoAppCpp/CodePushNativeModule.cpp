@@ -361,11 +361,12 @@ IAsyncAction CodePushNativeModule::LoadBundle()
         }
     }
 
+    /*
     m_context.UIDispatcher().Post([host = m_host]() {
         host.ReloadInstance();
         });
-
-    //m_host.ReloadInstance();
+        */
+    m_host.ReloadInstance();
 }
 
 /*
