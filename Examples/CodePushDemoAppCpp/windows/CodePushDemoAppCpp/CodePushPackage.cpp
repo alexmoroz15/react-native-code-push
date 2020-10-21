@@ -345,7 +345,8 @@ IAsyncOperation<StorageFile> CodePushPackage::GetCurrentPackageBundleAsync()
     auto relativeBundlePath{ currentPackage.GetNamedString(RelativeBundlePathKey, L"") };
     if (!relativeBundlePath.empty())
     {
-        co_return co_await FileUtils::GetFileAtPathAsync(packageFolder, wstring_view(relativeBundlePath));
+        auto currentBundle{ co_await FileUtils::GetFileAtPathAsync(packageFolder, wstring_view(relativeBundlePath)) };
+        co_return currentBundle;
     }
 
     co_return nullptr;
@@ -486,20 +487,22 @@ path GetDownloadFilePath()
 
 IAsyncOperation<JsonObject> CodePushPackage::GetPackageAsync(wstring_view packageHash)
 {
-    try
+    auto updateDirectory{ co_await GetPackageFolderAsync(packageHash) };
+    if (updateDirectory != nullptr)
     {
-        auto updateDirectoryPath{ GetPackageFolderPath(packageHash) };
-        auto updateMetadataFilePath{ updateDirectoryPath / UpdateMetadataFileName };
-        auto updateMetadataFile{ co_await StorageFile::GetFileFromPathAsync(updateMetadataFilePath.wstring()) };
-        auto updateMetadataString{ co_await FileIO::ReadTextAsync(updateMetadataFile) };
-        auto updateMetadata{ JsonObject::Parse(updateMetadataString) };
-        co_return updateMetadata;
+        auto updateMetadataFile{ (co_await updateDirectory.TryGetItemAsync(UpdateMetadataFileName)).try_as<StorageFile>() };
+        if (updateMetadataFile != nullptr)
+        {
+            auto updateMetadataString{ co_await FileIO::ReadTextAsync(updateMetadataFile) };
+            JsonObject updateMetadata;
+            auto success{ JsonObject::TryParse(updateMetadataString, updateMetadata) };
+            if (success)
+            {
+                co_return updateMetadata;
+            }
+        }
     }
-    catch (...)
-    {
-        co_return nullptr;
-    }
-	co_return nullptr;
+    co_return nullptr;
 }
 
 IAsyncOperation<StorageFolder> GetPackageFolderAsync(wstring_view packageHash)
@@ -546,7 +549,7 @@ IAsyncOperation<bool> CodePushPackage::InstallPackageAsync(JsonObject updatePack
     else
     {
         auto previousPackageHash{ co_await GetPreviousPackageHashAsync() };
-        if (previousPackageHash == packageHash)
+        if (!previousPackageHash.empty() && previousPackageHash != packageHash)
         {
             auto previousPackageFolder{ co_await GetPackageFolderAsync(previousPackageHash) };
             try
