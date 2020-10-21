@@ -40,6 +40,10 @@ using namespace filesystem;
 
 using namespace CodePush;
 
+bool CodePushNativeModule::isRunningBinaryVersion{ false };
+bool CodePushNativeModule::needToReportRollback{ false };
+bool CodePushNativeModule::testConfigurationFlag{ false };
+
 IAsyncOperation<StorageFile> CodePushNativeModule::GetBinaryBundleAsync() 
 {
     auto appXFolder{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
@@ -61,46 +65,44 @@ IAsyncOperation<StorageFile> CodePushNativeModule::GetBundleFileAsync()
 
     if (packageBundle == nullptr)
     {
-        CodePushUtils::Log(L"Loading bundle from: ");
-        //m_isRunningBinaryVersion = true;
+        CodePushUtils::Log(L"Loading bundle from binary.");
+        isRunningBinaryVersion = true;
         co_return binaryBundle;
     }
 
-    //auto binaryAppVersion{ m_codePushConfig.GetAppVersion() };
-    auto binaryAppVersion{ L"" };
+    auto binaryAppVersion{ CodePushConfig::Current().GetAppVersion() };
     auto currentPackageMetadata{ co_await CodePushPackage::GetCurrentPackageAsync() };
-    if (currentPackageMetadata == nullptr);
+    if (currentPackageMetadata == nullptr)
     {
-        CodePushUtils::Log(L"Loading bundle from: ");
-        //m_isRunningBinaryVersion = true;
+        CodePushUtils::Log(L"Loading bundle from binary.");
+        isRunningBinaryVersion = true;
         co_return binaryBundle;
     }
 
     auto packageDate{ currentPackageMetadata.GetNamedString(BinaryBundleDateKey, L"") };
     auto packageAppVersion{ currentPackageMetadata.GetNamedString(AppVersionKey, L"") };
 
-    if ((co_await CodePushUpdateUtils::ModifiedDateStringOfFileAsync(binaryBundle)) == packageDate && (/*m_isUsingTestConfiguration*/ false || binaryAppVersion == packageAppVersion))
+    if ((co_await CodePushUpdateUtils::ModifiedDateStringOfFileAsync(binaryBundle)) == packageDate && (IsUsingTestConfiguration() || binaryAppVersion == packageAppVersion))
     {
         // Return package file because it is newer than the app store binary's JS bundle
-        CodePushUtils::Log(L"Loading bundle from: ");
-        //m_isRunningBinaryVersion = false;
+        CodePushUtils::Log(L"Loading bundle from package.");
+        isRunningBinaryVersion = false;
         co_return packageBundle;
     }
     else
-    {    
-#if _DEBUG
-        bool isRelease{ false };
-#else
-        bool isRelease{ true };
+    {
+        auto isRelease{ false };
+#if !_DEBUG
+        isRelease = true;
 #endif
 
         if (isRelease || binaryAppVersion != packageAppVersion)
         {
-            //ClearUpdates()
+            co_await ClearUpdatesStaticAsync();
         }
 
-        CodePushUtils::Log(L"Loading bundle from: ");
-        //m_isRunningBinaryVersion = true;
+        CodePushUtils::Log(L"Loading bundle from binary.");
+        isRunningBinaryVersion = true;
         co_return binaryBundle;
     }
 }
@@ -187,12 +189,12 @@ path CodePushNativeModule::GetLocalStoragePath()
 
 void CodePushNativeModule::OverrideAppVersion(wstring_view appVersion) 
 {
-    m_codePushConfig.SetAppVersion(appVersion);
+    CodePushConfig::Current().SetAppVersion(appVersion);
 }
 
 void CodePushNativeModule::SetDeploymentKey(wstring_view deploymentKey) 
 {
-    m_codePushConfig.SetDeploymentKey(deploymentKey);
+    CodePushConfig::Current().SetDeploymentKey(deploymentKey);
 }
 
 /*
@@ -288,7 +290,7 @@ bool CodePushNativeModule::IsPendingUpdate(wstring_view packageHash)
  */
 bool CodePushNativeModule::IsUsingTestConfiguration() 
 { 
-    return m_testConfigurationFlag;
+    return testConfigurationFlag;
 }
 
 /*
@@ -299,7 +301,7 @@ bool CodePushNativeModule::IsUsingTestConfiguration()
  */
 void CodePushNativeModule::SetUsingTestConfiguration(bool shouldUseTestConfiguration) 
 {
-    m_testConfigurationFlag = shouldUseTestConfiguration;
+    testConfigurationFlag = shouldUseTestConfiguration;
 }
 
 /*
@@ -311,17 +313,24 @@ void CodePushNativeModule::SetUsingTestConfiguration(bool shouldUseTestConfigura
 IAsyncAction CodePushNativeModule::ClearDebugUpdates()
 {
 #if (!BUNDLE)
-    auto binaryAppVersion{ m_codePushConfig.GetAppVersion() };
+    auto binaryAppVersion{ CodePushConfig::Current().GetAppVersion() };
     auto currentPackageMetadata{ co_await CodePushPackage::GetCurrentPackageAsync() };
     if (currentPackageMetadata != nullptr)
     {
         auto packageAppVersion{ currentPackageMetadata.GetNamedString(AppVersionKey, L"") };
         if (!binaryAppVersion.has_value() || binaryAppVersion.value() != packageAppVersion)
         {
-            ClearUpdates();
+            co_await ClearUpdatesStaticAsync();
         }
     }
 #endif
+}
+
+IAsyncAction CodePushNativeModule::ClearUpdatesStaticAsync()
+{
+    co_await CodePushPackage::ClearUpdatesAsync();
+    RemovePendingUpdate();
+    RemoveFailedUpdates();
 }
 
 void CodePushNativeModule::DispatchDownloadProgressEvent()
@@ -341,15 +350,19 @@ IAsyncAction CodePushNativeModule::LoadBundle()
     if (IsUsingTestConfiguration() || !m_host.InstanceSettings().UseWebDebugger())
     {
         auto bundleFile{ co_await GetBundleFileAsync() };
-        //m_host.InstanceSettings().BundleRootPath();
-    }
-    /*
-    if ([CodePush isUsingTestConfiguration] || ![super.bridge.bundleURL.scheme hasPrefix:@"http"]) {
-            [super.bridge setValue:[CodePush bundleURL] forKey:@"bundleURL"];
+        if (bundleFile != nullptr)
+        {
+            wstring_view bundlePath{ bundleFile.Path() };
+            hstring bundleRootPath{ bundlePath.substr(0, bundlePath.rfind('\\')) };
+            m_host.InstanceSettings().BundleRootPath(bundleRootPath);
         }
-    */
+    }
 
-    m_host.ReloadInstance();
+    m_context.UIDispatcher().Post([host = m_host]() {
+        host.ReloadInstance();
+        });
+
+    //m_host.ReloadInstance();
 }
 
 /*
@@ -476,8 +489,6 @@ void CodePushNativeModule::Initialize(ReactContext const& reactContext) noexcept
     auto res = reactContext.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"));
     m_host = res.as<ReactNativeHost>();
 
-    m_codePushConfig = CodePushConfig::Init(reactContext);
-
     InitializeUpdateAfterRestart();
 }
 
@@ -506,7 +517,7 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
         updatePackage.Insert(BinaryBundleDateKey, JsonValue::CreateStringValue(modifiedDate));
     }
 
-    auto publicKey{ m_codePushConfig.GetPublicKey() };
+    auto publicKey{ CodePushConfig::Current().GetPublicKey() };
 
     try
     {
@@ -556,10 +567,9 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
  */
 fire_and_forget CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
 {
-    auto configuration{ m_codePushConfig.GetConfiguration() };
-    if (m_isRunningBinaryVersion)
+    auto configuration{ CodePushConfig::Current().GetConfiguration() };
+    if (isRunningBinaryVersion)
     {
-        // isRunningBinaryVersion will not get set to "true" if running against the packager.
         hstring binaryHash;
         try
         {
@@ -622,7 +632,7 @@ fire_and_forget CodePushNativeModule::GetUpdateMetadataAsync(CodePushUpdateState
         // 1) Caller wanted a pending, and there is a pending update
         // 2) Caller wanted the running update, and there isn't a pending
         // 3) Caller wants the latest update, regardless if it's pending or not
-        if (m_isRunningBinaryVersion) {
+        if (isRunningBinaryVersion) {
             // This only matters in Debug builds. Since we do not clear "outdated" updates,
             // we need to indicate to the JS side that somehow we have a current update on
             // disk that is not actually running.
@@ -731,9 +741,11 @@ void CodePushNativeModule::SetLatestRollbackInfo(wstring packageHash) noexcept
  */
 IAsyncAction CodePushNativeModule::InitializeUpdateAfterRestart()
 {
-#if _DEBUG
-    co_await ClearDebugUpdates();
-#endif
+    if (m_host.InstanceSettings().UseDeveloperSupport())
+    {
+        co_await ClearDebugUpdates();
+    }
+
     auto localSettings{ ApplicationData::Current().LocalSettings() };
     auto pendingUpdateData{ localSettings.Values().TryLookup(PendingUpdateKey) };
     if (pendingUpdateData != nullptr)
@@ -750,7 +762,7 @@ IAsyncAction CodePushNativeModule::InitializeUpdateAfterRestart()
                 // Pending update was initialized, but notifyApplicationReady was not called.
                 // Therefore, deduce that it is a broken update and rollback.
                 CodePushUtils::Log(L"Update did not finish loading the last time, rolling back to a previous version.");
-                m_needToReportRollback = true;
+                needToReportRollback = true;
                 co_await RollbackPackage();
             }
             else
@@ -852,9 +864,7 @@ fire_and_forget CodePushNativeModule::RestartApp(bool onlyIfUpdateIsPending, Rea
  */
 fire_and_forget CodePushNativeModule::ClearUpdates() noexcept 
 {
-    co_await CodePushPackage::ClearUpdatesAsync();
-    RemovePendingUpdate();
-    RemoveFailedUpdates();
+    co_await ClearUpdatesStaticAsync();
 }
 
 // #pragma mark - JavaScript-exported module methods (Private)
@@ -879,9 +889,9 @@ fire_and_forget CodePushNativeModule::DownloadAndReplaceCurrentBundle(wstring re
  */
 fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJsonValue> promise) noexcept 
 {
-    if (m_needToReportRollback)
+    if (needToReportRollback)
     {
-        m_needToReportRollback = false;
+        needToReportRollback = false;
         auto localSettings{ ApplicationData::Current().LocalSettings() };
         auto failedUpdatesData{ localSettings.Values().TryLookup(FailedUpdatesKey) };
         if (failedUpdatesData != nullptr)
@@ -909,9 +919,9 @@ fire_and_forget CodePushNativeModule::GetNewStatusReportAsync(ReactPromise<IJson
             co_return;
         }
     }
-    else if (m_isRunningBinaryVersion)
+    else if (isRunningBinaryVersion)
     {
-        auto appVersion{ m_codePushConfig.GetAppVersion() };
+        auto appVersion{ CodePushConfig::Current().GetAppVersion() };
         wstring_view appVersionString{ appVersion.has_value() ? appVersion.value() : L"" };
         promise.Resolve(CodePushTelemetryManager::GetBinaryUpdateReport(appVersionString));
         co_return;
