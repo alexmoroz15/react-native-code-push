@@ -78,9 +78,9 @@ namespace CodePush
 		inline static const wstring_view PackageIsPendingKey{ L"isPending" };
 
 
-		bool m_isRunningBinaryVersion{ false };
-		bool m_needToReportRollback{ false };
-		bool m_testConfigurationFlag{ false };
+		static bool isRunningBinaryVersion;
+		static bool needToReportRollback;
+		static bool testConfigurationFlag;
 
 		// These values are used to save the NS bundle, name, extension and subdirectory
 		// for the JS bundle in the binary.
@@ -93,20 +93,21 @@ namespace CodePush
 		*/
 		ReactNativeHost m_host;
 		ReactContext m_context;
-		CodePushConfig m_codePushConfig;
+		//CodePushConfig m_codePushConfig;
 
 		// These keys represent the names we use to store information about the latest rollback
-		const wstring LatestRollbackInfoKey{ L"LATEST_ROLLBACK_INFO" };
-		const wstring LatestRollbackPackageHashKey{ L"packageHash" };
-		const wstring LatestRollbackTimeKey{ L"time" };
-		const wstring LatestRollbackCountKey{ L"count" };
+		inline static const wstring_view LatestRollbackInfoKey{ L"LATEST_ROLLBACK_INFO" };
+		inline static const wstring_view LatestRollbackPackageHashKey{ L"packageHash" };
+		inline static const wstring_view LatestRollbackTimeKey{ L"time" };
+		inline static const wstring_view LatestRollbackCountKey{ L"count" };
 
+		static IAsyncAction ClearUpdatesStaticAsync();
 		void DispatchDownloadProgressEvent();
 		IAsyncAction InitializeUpdateAfterRestart();
 		IAsyncAction LoadBundle();
 		IAsyncAction RollbackPackage();
-		void RemoveFailedUpdates();
-		void RemovePendingUpdate();
+		static void RemoveFailedUpdates();
+		static void RemovePendingUpdate();
 		IAsyncAction RestartAppInternal(bool onlyIfUpdateIsPending);
 		void SaveFailedUpdate(JsonObject& failedPackage);
 		void SavePendingUpdate(wstring_view packageHash, bool isLoading);
@@ -146,8 +147,8 @@ namespace CodePush
 
 		bool IsPendingUpdate(wstring_view packageHash);
 
-		bool IsUsingTestConfiguration();
-		void SetUsingTestConfiguration(bool shouldUseTestConfiguration);
+		static bool IsUsingTestConfiguration();
+		static void SetUsingTestConfiguration(bool shouldUseTestConfiguration);
 		IAsyncAction ClearDebugUpdates();
 
 		REACT_INIT(Initialize);
