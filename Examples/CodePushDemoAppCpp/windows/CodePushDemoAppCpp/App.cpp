@@ -63,7 +63,6 @@ App::App() noexcept
     auto configMap{ winrt::single_threaded_map<hstring, hstring>() };
     configMap.Insert(L"appVersion", L"1.0.0");
     configMap.Insert(L"deploymentKey", L"BJwawsbtm8a1lTuuyN0GPPXMXCO1oUFtA_jJS");
-    configMap.Insert(L"serverUrl", L"https://codepush.appcenter.ms/");
     CodePush::CodePushConfig::Init(configMap);
 
     CodePush::CodePushNativeModule::GetBundleFileAsync();
