@@ -36,8 +36,28 @@ IStorageItem GetItemAtPath(const path& itemPath)
 }
 */
 
-IAsyncOperation<StorageFile> FileUtils::GetFileAtPathAsync(StorageFolder rootFolder, path relPath)
+IAsyncOperation<StorageFile> FileUtils::GetFileAtPathAsync(const StorageFolder& rootFolder, wstring_view relPath)
 {
+    auto folder{ rootFolder };
+    size_t start{ 0 };
+    size_t end;
+    while ((end = relPath.find('\\', start)) != wstring_view::npos)
+    {
+        hstring pathPart{ relPath.substr(start, end - start) };
+        folder = (co_await folder.TryGetItemAsync(pathPart)).try_as<StorageFolder>();
+        if (folder == nullptr)
+        {
+            co_return nullptr;
+        }
+        start = end + 1;
+    }
+
+    auto fileName{ relPath.substr(start) };
+    auto file{ (co_await folder.TryGetItemAsync(fileName)).try_as<StorageFile>() };
+    co_return file;
+
+
+    /*
     stack<wstring> pathParts;
     while (relPath.has_parent_path())
     {
@@ -62,6 +82,7 @@ IAsyncOperation<StorageFile> FileUtils::GetFileAtPathAsync(StorageFolder rootFol
         co_return nullptr;
     }
     co_return file;
+    */
 }
 
 // Returns the folder at the specified path relative to the rootfolder

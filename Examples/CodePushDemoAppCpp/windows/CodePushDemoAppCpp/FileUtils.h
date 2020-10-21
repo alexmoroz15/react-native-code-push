@@ -23,7 +23,7 @@ namespace CodePush
 		IStorageItem GetItemAtPath(const path& itemPath);
 		StorageFile GetFileAtPath(const path& filePath);
 
-		static IAsyncOperation<StorageFile> GetFileAtPathAsync(StorageFolder rootFolder, path relPath);
+		static IAsyncOperation<StorageFile> GetFileAtPathAsync(const StorageFolder& rootFolder, wstring_view relPath);
 		static IAsyncOperation<StorageFolder> GetFolderAtPathAsync(StorageFolder rootFolder, path relPath);
 
 		static IAsyncOperation<StorageFile> GetOrCreateFileAtPathAsync(StorageFolder rootFolder, path relPath);
