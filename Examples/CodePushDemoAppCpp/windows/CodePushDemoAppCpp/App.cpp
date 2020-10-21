@@ -74,8 +74,6 @@ App::App() noexcept
     InstanceSettings().BundleRootPath(bundleRootPath);
     */
     
-
-    
     InitializeComponent();
 }
 

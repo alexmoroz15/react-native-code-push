@@ -355,9 +355,6 @@ IAsyncAction CodePushNativeModule::LoadBundle()
             wstring_view bundlePath{ bundleFile.Path() };
             hstring bundleRootPath{ bundlePath.substr(0, bundlePath.rfind('\\')) };
             m_host.InstanceSettings().BundleRootPath(bundleRootPath);
-
-            auto localSettings{ ApplicationData::Current().LocalSettings() };
-            localSettings.Values().Insert(L"bundleRootPath", box_value(bundleRootPath));
         }
     }
 
