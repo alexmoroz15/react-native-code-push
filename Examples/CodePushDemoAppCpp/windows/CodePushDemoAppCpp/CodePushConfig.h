@@ -30,7 +30,11 @@ namespace CodePush
 
 		IMap<hstring, hstring> configuration;
 
+		static CodePushConfig _currentConfig;
+
 	public:
+		static CodePushConfig& Current();
+
 		std::optional<hstring> GetAppVersion() { return configuration.TryLookup(AppVersionConfigKey); }
 		void SetAppVersion(wstring_view appVersion) { configuration.Insert(AppVersionConfigKey, appVersion); }
 
@@ -47,7 +51,7 @@ namespace CodePush
 		std::optional<hstring> GetPublicKey() { return configuration.TryLookup(PublicKeyKey); }
 		void SetPublicKey(wstring_view publicKey) { configuration.Insert(PublicKeyKey, publicKey); }
 
-		static CodePushConfig Init(const ReactContext& context);
+		static CodePushConfig& Init(const IMap<hstring, hstring>& configMap);
 
 	};
 }

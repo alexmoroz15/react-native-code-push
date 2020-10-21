@@ -12,6 +12,13 @@ using namespace std;
 
 using namespace CodePush;
 
+CodePushConfig CodePushConfig::_currentConfig{};
+
+CodePushConfig& CodePushConfig::Current()
+{
+    return _currentConfig;
+}
+
 JsonObject CodePushConfig::GetConfiguration()
 {
     JsonObject configObject;
@@ -22,30 +29,29 @@ JsonObject CodePushConfig::GetConfiguration()
     return configObject;
 }
 
-CodePushConfig CodePushConfig::Init(const ReactContext& context)
+CodePushConfig& CodePushConfig::Init(const IMap<hstring, hstring>& configMap)
 {
-    CodePushConfig config;
     std::optional<hstring> appVersion;
     std::optional<hstring> buildVersion;
     std::optional<hstring> deploymentKey;
     std::optional<hstring> publicKey;
     std::optional<hstring> serverUrl;
 
-    auto res = context.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"Configuration")).try_as<IMap<hstring, hstring>>();
-    if (res != nullptr)
+    //auto res = context.Properties().Handle().Get(ReactPropertyBagHelper::GetName(nullptr, L"Configuration")).try_as<IMap<hstring, hstring>>();
+    if (configMap != nullptr)
     {
-        appVersion = res.TryLookup(AppVersionConfigKey);
-        buildVersion = res.TryLookup(BuildVersionConfigKey);
-        deploymentKey = res.TryLookup(DeploymentKeyConfigKey);
-        publicKey = res.TryLookup(PublicKeyKey);
-        serverUrl = res.TryLookup(ServerURLConfigKey);
+        appVersion = configMap.TryLookup(AppVersionConfigKey);
+        buildVersion = configMap.TryLookup(BuildVersionConfigKey);
+        deploymentKey = configMap.TryLookup(DeploymentKeyConfigKey);
+        publicKey = configMap.TryLookup(PublicKeyKey);
+        serverUrl = configMap.TryLookup(ServerURLConfigKey);
     }
 
-    config.configuration = winrt::single_threaded_map<hstring, hstring>();
+    _currentConfig.configuration = winrt::single_threaded_map<hstring, hstring>();
     auto addToConfiguration = [=](wstring_view key, std::optional<hstring> optValue) {
         if (optValue.has_value())
         {
-            config.configuration.Insert(key, optValue.value());
+            _currentConfig.configuration.Insert(key, optValue.value());
         }
     };
 
@@ -59,9 +65,9 @@ CodePushConfig CodePushConfig::Init(const ReactContext& context)
 
     if (!serverUrl.has_value())
     {
-        config.configuration.Insert(ServerURLConfigKey, L"https://codepush.appcenter.ms/");
+        _currentConfig.configuration.Insert(ServerURLConfigKey, L"https://codepush.appcenter.ms/");
     }
-    return config;
+    return _currentConfig;
 }
 
 /*
