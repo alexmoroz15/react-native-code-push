@@ -108,7 +108,7 @@ class App extends Component<{}> {
 					  Welcome to CodePush!
 					</Text>
 					<Text style={styles.welcome}>
-						Release bundle 3:42 PM
+						Demo bundle
 					</Text>
 					<TouchableOpacity onPress={this.restartApp.bind(this)}>
 						<Text style={styles.syncButton}>Press to restart</Text>
