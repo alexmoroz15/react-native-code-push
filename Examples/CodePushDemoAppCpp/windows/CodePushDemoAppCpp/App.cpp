@@ -37,28 +37,38 @@ using namespace std;
 /// </summary>
 App::App() noexcept
 {
-#if BUNDLE
+//#if BUNDLE
 
     //InstanceSettings().BundleRootPath(CodePush::CodePush::GetJSBundleFileSync());
 
+    /*
     auto localSettings{ ApplicationData::Current().LocalSettings() };
     localSettings.Values().Remove(L"currentPackageFolderPath");
+    */
+
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    auto bundleRootPathData{ localSettings.Values().TryLookup(L"bundleRootPath") };
+    if (bundleRootPathData != nullptr)
+    {
+        auto bundleRootPath{ unbox_value<hstring>(bundleRootPathData) };
+        InstanceSettings().BundleRootPath(bundleRootPath);
+    }
 
 
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
     InstanceSettings().UseFastRefresh(false);
-#else
+/*#else
     JavaScriptMainModuleName(L"index");
     InstanceSettings().UseWebDebugger(true);
     InstanceSettings().UseFastRefresh(true);
-#endif
+#endif*/
 
-#if _DEBUG
+//#if _DEBUG
     InstanceSettings().UseDeveloperSupport(true);
-#else
+/*#else
     InstanceSettings().UseDeveloperSupport(false);
-#endif
+#endif*/
 
     RegisterAutolinkedNativeModulePackages(PackageProviders()); // Includes any autolinked modules
 
@@ -78,6 +88,8 @@ App::App() noexcept
     hstring bundleRootPath{ bundlePath.substr(0, bundlePath.rfind('\\')) };
     InstanceSettings().BundleRootPath(bundleRootPath);
     */
+    
+
     
     InitializeComponent();
 }
