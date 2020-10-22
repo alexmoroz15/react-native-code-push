@@ -564,7 +564,7 @@ fire_and_forget CodePushNativeModule::DownloadUpdateAsync(JsonObject updatePacka
  * This is the native side of the CodePush.getConfiguration method. It isn't
  * currently exposed via the "react-native-code-push" module, and is used
  * internally only by the CodePush.checkForUpdate method in order to get the
- * app version, as well as the deployment key that was configured in the Info.plist file.
+ * app version, as well as the deployment key that was configured in App.cpp.
  */
 fire_and_forget CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> promise) noexcept 
 {
@@ -587,7 +587,7 @@ fire_and_forget CodePushNativeModule::GetConfiguration(ReactPromise<IJsonValue> 
         if (binaryHash.empty())
         {
             // The hash was not generated either due to a previous unknown error or the fact that
-            // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
+            // the React Native assets were not bundled in the binary (e.g. during release)
             // builds.
             promise.Resolve(configuration);
             co_return;
@@ -687,6 +687,8 @@ fire_and_forget CodePushNativeModule::InstallUpdateAsync(JsonObject updatePackag
             m_hasResumeListener = true;
         }
     }
+
+    // Essentially, for RNW, InstallMode is always IMMEDIATE
 
     // Signal to JS that the update has been applied.
     promise.Resolve();
