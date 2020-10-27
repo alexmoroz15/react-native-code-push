@@ -18,7 +18,27 @@ In order to ensure that your end users always have a functioning version of your
 
 ## Getting Started
 
-TODO
+For now, all files are located in Examples/CodePushDemoAppCpp/windows/CodePushDemoAppCpp
+
+To install in your native app, copy over and include in your windows project the following files:
+- All source and headers files that begin with CodePush
+- FileUtils.h
+- FileUtils.cpp
+- miniz.c
+- miniz.h
+
+Disable precompiled headers for miniz.c
+
+Add the following code to App.cpp:
+
+    InstanceSettings().Properties().Set(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
+    
+    auto configMap{ winrt::single_threaded_map<hstring, hstring>() };
+    configMap.Insert(L"appVersion", L"1.0.0");
+    configMap.Insert(L"deploymentKey", L"<Your deployment key here>");
+    CodePush::CodePushConfig::Init(configMap);
+    
+    CodePush::CodePushNativeModule::GetBundleFileAsync();
 
 ## Using the Module
 
