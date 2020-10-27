@@ -58,7 +58,7 @@ App::App() noexcept
 
     PackageProviders().Append(make<ReactPackageProvider>()); // Includes all modules in this project
 
-    InstanceSettings().Properties().Set(ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
+    InstanceSettings().Properties().Set(winrt::Microsoft::ReactNative::ReactPropertyBagHelper::GetName(nullptr, L"MyReactNativeHost"), Host());
 
     auto configMap{ winrt::single_threaded_map<hstring, hstring>() };
     configMap.Insert(L"appVersion", L"1.0.0");
