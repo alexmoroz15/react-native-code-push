@@ -83,6 +83,7 @@ namespace CodePush
         static IAsyncAction AddFileToManifest(const StorageFile& file, IMap<hstring, hstring>& manifest);
         static hstring ComputeFinalHashFromManifest(IMap<hstring, hstring>& manifest);
         static hstring ComputeHashForData(const IBuffer& inputData);
+        static IAsyncOperation<hstring> GetSignatureForAsync(const StorageFolder& folder);
 
     public:
         static bool CopyEntriesInFolder(StorageFolder& sourceFolder, StorageFolder& destFolder);
@@ -90,11 +91,11 @@ namespace CodePush
         static IAsyncOperation<hstring> GetHashForBinaryContents(const StorageFile& binaryBundle);
         static IAsyncOperation<hstring> ModifiedDateStringOfFileAsync(const StorageFile& file);
         static bool IsHashIgnoredFor(path relativePath);
-        static bool VerifyFolderHash(StorageFolder& finalUpdateFolder, const wstring& expectedHash);
+        static IAsyncOperation<bool> VerifyFolderHashAsync(const StorageFolder& finalUpdateFolder, wstring_view expectedHash);
 
-        static wstring GetKeyValueFromPublicKeyString(const wstring& publicKeyString);
-        static wstring GetSignatureFilePath(const path& updateFolderPath);
+        static wstring GetKeyValueFromPublicKeyString(wstring_view publicKeyString);
+        static IAsyncOperation<StorageFile> GetSignatureFileAsync(const StorageFolder& rootFolder);
         static JsonObject VerifyAndDecodeJWT(const wstring& jwt, const wstring& publicKey);
-        static bool VerifyUpdateSignatureFor(const path& updateFolderPath, const wstring& newUpdateHash, const wstring& publicKeyString);
+        static IAsyncOperation<bool> VerifyUpdateSignatureForAsync(const StorageFolder& updateFolder, wstring_view newUpdateHash, wstring_view publicKeyString);
     };
 }

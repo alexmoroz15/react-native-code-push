@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "CodePushUpdateUtils.h"
+#include "CodePushUtils.h"
 
 using namespace std;
 
@@ -315,6 +316,197 @@ error : (NSError**)error
     [preferences setObject : binaryHashDictionary forKey : BinaryHashKey] ;
     [preferences synchronize] ;
     return binaryHash;
+}
+*/
+
+// remove BEGIN / END tags and line breaks from public key string
+wstring CodePushUpdateUtils::GetKeyValueFromPublicKeyString(wstring_view publicKeyString)
+{
+    wstring copy{ publicKeyString };
+
+    wstring_view strings[]{ L"-----BEGIN PUBLIC KEY-----\n", L"-----END PUBLIC KEY-----", L"\n" };
+    for (const auto& str : strings)
+    {
+        while (size_t pos = copy.find(str) != wstring::npos)
+        {
+            copy.replace(pos, pos + str.size(), L"");
+        }
+    }
+    
+    return copy;
+}
+
+/*
+// remove BEGIN / END tags and line breaks from public key string
++ (NSString*)getKeyValueFromPublicKeyString:(NSString*)publicKeyString
+{
+    publicKeyString = [publicKeyString stringByReplacingOccurrencesOfString : @"-----BEGIN PUBLIC KEY-----\n"
+        withString:@""];
+    publicKeyString = [publicKeyString stringByReplacingOccurrencesOfString : @"-----END PUBLIC KEY-----"
+        withString:@""];
+    publicKeyString = [publicKeyString stringByReplacingOccurrencesOfString : @"\n"
+        withString:@""];
+
+    return publicKeyString;
+}
+*/
+
+IAsyncOperation<bool> CodePushUpdateUtils::VerifyFolderHashAsync(const StorageFolder& finalUpdateFolder, wstring_view expectedHash)
+{
+    CodePushUtils::Log(L"Verifying hash for folder: " + finalUpdateFolder.Path());
+
+    auto updateContentsManifest{ single_threaded_map<hstring, hstring>() };
+    auto result{ co_await AddContentsOfFolderToManifestAsync(finalUpdateFolder, L"", updateContentsManifest) };
+
+    // log manifest
+
+    if (!result)
+    {
+        co_return false;
+    }
+
+    auto updateContentsManifestHash{ ComputeFinalHashFromManifest(updateContentsManifest) };
+    if (updateContentsManifestHash.empty())
+    {
+        co_return false;
+    }
+
+    CodePushUtils::Log(L"Expected hash: " + expectedHash + L", actual hash: " + updateContentsManifestHash);
+
+    co_return updateContentsManifestHash == expectedHash;
+}
+
+/*
++ (BOOL)verifyFolderHash:(NSString*)finalUpdateFolder
+expectedHash : (NSString*)expectedHash
+error : (NSError**)error
+{
+    CPLog(@"Verifying hash for folder path: %@", finalUpdateFolder);
+
+    NSMutableArray* updateContentsManifest = [NSMutableArray array];
+    BOOL result = [self addContentsOfFolderToManifest : finalUpdateFolder
+        pathPrefix : @""
+        manifest:updateContentsManifest
+        error : error];
+
+    CPLog(@"Manifest string: %@", updateContentsManifest);
+
+    if (!result) {
+        return NO;
+    }
+
+    NSString* updateContentsManifestHash = [self computeFinalHashFromManifest : updateContentsManifest
+        error : error];
+    if (!updateContentsManifestHash) {
+        return NO;
+    }
+
+    CPLog(@"Expected hash: %@, actual hash: %@", expectedHash, updateContentsManifestHash);
+
+    return[updateContentsManifestHash isEqualToString : expectedHash];
+}
+*/
+
+IAsyncOperation<bool> CodePushUpdateUtils::VerifyUpdateSignatureForAsync(const StorageFolder& updateFolder, wstring_view newUpdateHash, wstring_view publicKeyString)
+{
+    CodePushUtils::Log(L"Verifying signature for folder path: " + updateFolder.Path());
+    auto publicKey{ GetKeyValueFromPublicKeyString(publicKeyString) };
+
+    hstring signature;
+    try
+    {
+        signature = co_await GetSignatureForAsync(updateFolder);
+    }
+    catch (const hresult_error& ex)
+    {
+        CodePushUtils::Log(L"The update could not be verified because no signature was found. " + ex.message());
+        return false;
+    }
+
+    return false;
+}
+
+/*
++ (BOOL)verifyUpdateSignatureFor:(NSString*)folderPath
+expectedHash : (NSString*)newUpdateHash
+withPublicKey : (NSString*)publicKeyString
+error : (NSError**)error
+{
+    NSLog(@"Verifying signature for folder path: %@", folderPath);
+
+    NSString* publicKey = [self getKeyValueFromPublicKeyString : publicKeyString];
+
+    NSError* signatureVerificationError;
+    NSString* signature = [self getSignatureFor : folderPath
+        error : &signatureVerificationError];
+    if (signatureVerificationError) {
+        CPLog(@"The update could not be verified because no signature was found. %@", signatureVerificationError);
+        *error = signatureVerificationError;
+        return false;
+    }
+
+    NSError* payloadDecodingError;
+    NSDictionary* envelopedPayload = [self verifyAndDecodeJWT : signature withPublicKey : publicKey error : &payloadDecodingError];
+    if (payloadDecodingError) {
+        CPLog(@"The update could not be verified because it was not signed by a trusted party. %@", payloadDecodingError);
+        *error = payloadDecodingError;
+        return false;
+    }
+
+    CPLog(@"JWT signature verification succeeded, payload content:  %@", envelopedPayload);
+
+    if (![envelopedPayload objectForKey : @"contentHash"]) {
+        CPLog(@"The update could not be verified because the signature did not specify a content hash.");
+        return false;
+    }
+
+    NSString* contentHash = envelopedPayload[@"contentHash"];
+
+    return[contentHash isEqualToString : newUpdateHash];
+}
+*/
+
+
+IAsyncOperation<StorageFile> CodePushUpdateUtils::GetSignatureFileAsync(const StorageFolder& rootFolder)
+{
+    auto manifestFolder{ (co_await rootFolder.TryGetItemAsync(ManifestFolderPrefix)).try_as<StorageFolder>() };
+    if (manifestFolder != nullptr)
+    {
+        auto bundleJWTFile{ (co_await rootFolder.TryGetItemAsync(BundleJWTFile)).try_as<StorageFile>() };
+        if (bundleJWTFile != nullptr)
+        {
+            co_return bundleJWTFile;
+        }
+    }
+    co_return nullptr;
+}
+
+IAsyncOperation<hstring> CodePushUpdateUtils::GetSignatureForAsync(const StorageFolder& folder)
+{
+    auto signatureFile{ co_await GetSignatureFileAsync(folder) };
+    if (signatureFile != nullptr)
+    {
+        co_return co_await FileIO::ReadTextAsync(signatureFile, UnicodeEncoding::Utf8);
+    }
+    else
+    {
+        throw hresult_error{ HRESULT_FROM_WIN32(E_FAIL), L"Cannot find signature." };
+        co_return L"";
+    }
+}
+
+/*
++ (NSString*)getSignatureFor:(NSString*)folderPath
+error : (NSError**)error
+{
+    NSString* signatureFilePath = [self getSignatureFilePath : folderPath];
+    if ([[NSFileManager defaultManager]fileExistsAtPath:signatureFilePath] ) {
+        return[NSString stringWithContentsOfFile : signatureFilePath encoding : NSUTF8StringEncoding error : error];
+    }
+    else {
+        *error = [CodePushErrorUtils errorWithMessage : [NSString stringWithFormat : @"Cannot find signature at %@", signatureFilePath] ];
+        return nil;
+    }
 }
 */
 

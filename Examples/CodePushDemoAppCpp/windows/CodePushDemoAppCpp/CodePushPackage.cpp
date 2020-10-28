@@ -4,6 +4,7 @@
 #include "CodePushNativeModule.h"
 #include "CodePushPackage.h"
 #include "CodePushUtils.h"
+#include "CodePushUpdateUtils.h"
 #include "FileUtils.h"
 
 #include <winrt/Windows.Storage.h>
@@ -190,53 +191,43 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
         CodePushUtils::Log((isDiffUpdate) ? L"Applying diff update." : L"Applying full update.");
         auto isSignatureVerificationEnabled{ !publicKey.empty() };
 
-        bool isSignatureAppearedInBundle{ false };
-        /*
-        NSString *signatureFilePath = [CodePushUpdateUtils getSignatureFilePath:newUpdateFolderPath];
-        BOOL isSignatureAppearedInBundle = [[NSFileManager defaultManager] fileExistsAtPath:signatureFilePath];
-        */
+        auto signatureFile{ co_await CodePushUpdateUtils::GetSignatureFileAsync(newUpdateFolder) };
+        auto isSignatureAppearedInBundle{ signatureFile != nullptr };
 
         if (isSignatureVerificationEnabled)
         {
-            /*
-            if (isSignatureAppearedInBundle) {
-                if (![CodePushUpdateUtils verifyFolderHash:newUpdateFolderPath
-                                                expectedHash:newUpdateHash
-                                                        error:&error]) {
-                    CPLog(@"The update contents failed the data integrity check.");
-                    if (!error) {
-                        error = [CodePushErrorUtils errorWithMessage:@"The update contents failed the data integrity check."];
-                    }
+            if (isSignatureAppearedInBundle)
+            {
+                if (!(co_await CodePushUpdateUtils::VerifyFolderHashAsync(newUpdateFolder, newUpdateHash)))
+                {
+                    auto errorMessage{ L"" };
+                    throw hresult_error{ HRESULT_FROM_WIN32(E_FAIL), errorMessage };
+                }
+                else 
+                {
+                    CodePushUtils::Log(L"The update contents succeeded the data integrity check.");
+                }
 
-                    failCallback(error);
-                    return;
-                } else {
-                    CPLog(@"The update contents succeeded the data integrity check.");
+                auto isSignatureValid{ co_await CodePushUpdateUtils::VerifyUpdateSignatureForAsync(newUpdateFolder, newUpdateHash, publicKey) };
+
+                if (!isSignatureValid)
+                {
+                    auto errorMessage{ L"" };
+                    throw hresult_error{ HRESULT_FROM_WIN32(E_FAIL), errorMessage };
                 }
-                BOOL isSignatureValid = [CodePushUpdateUtils verifyUpdateSignatureFor:newUpdateFolderPath
-                                                                            expectedHash:newUpdateHash
-                                                                        withPublicKey:publicKey
-                                                                                error:&error];
-                if (!isSignatureValid) {
-                    CPLog(@"The update contents failed code signing check.");
-                    if (!error) {
-                        error = [CodePushErrorUtils errorWithMessage:@"The update contents failed code signing check."];
-                    }
-                    failCallback(error);
-                    return;
-                } else {
-                    CPLog(@"The update contents succeeded the code signing check.");
+                else
+                {
+                    CodePushUtils::Log(L"The update contents succeeded the code signing check.");
                 }
-            } else {
-                error = [CodePushErrorUtils errorWithMessage:
-                            @"Error! Public key was provided but there is no JWT signature within app bundle to verify " \
-                            "Possible reasons, why that might happen: \n" \
-                            "1. You've been released CodePush bundle update using version of CodePush CLI that is not support code signing.\n" \
-                            "2. You've been released CodePush bundle update without providing --privateKeyPath option."];
-                failCallback(error);
-                return;
             }
-            */
+            else
+            {
+                auto errorMessage{ L"Error! Public key was provided but there is no JWT signature within app bundle to verify " \
+                            L"Possible reasons, why that might happen: \n" \
+                            L"1. You've been released CodePush bundle update using a version of the CodePush CLI that does not support code signing.\n" \
+                            L"2. You've been released CodePush bundle update without providing --privateKeyPath option." };
+                throw hresult_error{ HRESULT_FROM_WIN32(E_FAIL), errorMessage };
+            }
         }
         else
         {
