@@ -324,6 +324,7 @@ IAsyncAction CodePushNativeModule::ClearDebugUpdates()
         }
     }
 #endif
+    co_return;
 }
 
 IAsyncAction CodePushNativeModule::ClearUpdatesStaticAsync()

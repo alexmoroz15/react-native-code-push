@@ -234,7 +234,9 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
             bool needToVerifyHash;
             if (isSignatureAppearedInBundle)
             {
-                CodePushUtils::Log(L"");
+                CodePushUtils::Log(L"Warning! JWT signature exists in codepush update but code integrity check couldn't be performed" \
+                    L" because there is no public key configured. " \
+                    L"Please ensure that public key is properly configured within your application.");
                 needToVerifyHash = true;
             }
             else
@@ -244,21 +246,16 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
 
             if (needToVerifyHash)
             {
-                /*
-                if (![CodePushUpdateUtils verifyFolderHash:newUpdateFolderPath
-                                                expectedHash:newUpdateHash
-                                                        error:&error]) {
-                    CPLog(@"The update contents failed the data integrity check.");
-                    if (!error) {
-                        error = [CodePushErrorUtils errorWithMessage:@"The update contents failed the data integrity check."];
-                    }
-
-                    failCallback(error);
-                    return;
-                } else {
-                    CPLog(@"The update contents succeeded the data integrity check.");
+                if (!(co_await CodePushUpdateUtils::VerifyFolderHashAsync(newUpdateFolder, newUpdateHash)))
+                {
+                    CodePushUtils::Log(L"The update contents failed the data integrity check.");
+                    auto errorMessage{ L"The update contents failed the data integrity check." };
+                    throw hresult_error{ HRESULT_FROM_WIN32(E_FAIL), errorMessage };
                 }
-                */
+                else
+                {
+                    CodePushUtils::Log(L"The update contents succeeded the data integrity check.");
+                }
             }
         }
     }
@@ -280,7 +277,7 @@ IAsyncOperation<StorageFolder> GetCodePushFolderAsync()
 {
     auto localStorage{ CodePushNativeModule::GetLocalStorageFolder() };
     auto codePushFolder{ co_await localStorage.CreateFolderAsync(L"CodePush", CreationCollisionOption::OpenIfExists) };
-    if (false /*CodePushNativeModule::IsUsingTestConfiguration()*/) // How can I have this static function refer to a member variable
+    if (CodePushNativeModule::IsUsingTestConfiguration())
     {
         co_return co_await codePushFolder.CreateFolderAsync(L"TestPackages", CreationCollisionOption::OpenIfExists);
     }
@@ -290,7 +287,7 @@ IAsyncOperation<StorageFolder> GetCodePushFolderAsync()
 path GetCodePushPath()
 {
     auto codePushPath{ CodePushNativeModule::GetLocalStoragePath() / L"CodePush" };
-    if (false /*CodePushNativeModule::IsUsingTestConfiguration()*/) // How can I have this static function refer to a member variable
+    if (CodePushNativeModule::IsUsingTestConfiguration())
     {
         codePushPath /= L"TestPackages";
     }
@@ -343,30 +340,6 @@ IAsyncOperation<StorageFile> CodePushPackage::GetCurrentPackageBundleAsync()
     co_return nullptr;
 }
 
-/*
-+ (NSString *)getCurrentPackageBundlePath:(NSError **)error
-{
-    NSString *packageFolder = [self getCurrentPackageFolderPath:error];
-
-    if (!packageFolder) {
-        return nil;
-    }
-
-    NSDictionary *currentPackage = [self getCurrentPackage:error];
-
-    if (!currentPackage) {
-        return nil;
-    }
-
-    NSString *relativeBundlePath = [currentPackage objectForKey:RelativeBundlePathKey];
-    if (relativeBundlePath) {
-        return [packageFolder stringByAppendingPathComponent:relativeBundlePath];
-    } else {
-        return [packageFolder stringByAppendingPathComponent:UpdateBundleFileName];
-    }
-}
-*/
-
 IAsyncOperation<StorageFolder> CodePushPackage::GetCurrentPackageFolderAsync()
 {
     auto info{ co_await GetCurrentPackageInfoAsync() };
@@ -385,25 +358,6 @@ IAsyncOperation<StorageFolder> CodePushPackage::GetCurrentPackageFolderAsync()
     auto packageFolder{ (co_await codePushFolder.TryGetItemAsync(packageHash)).try_as<StorageFolder>() };
     co_return packageFolder;
 }
-
-/*
-+ (NSString*)getCurrentPackageFolderPath:(NSError**)error
-{
-    NSDictionary* info = [self getCurrentPackageInfo : error];
-
-    if (!info) {
-        return nil;
-    }
-
-    NSString* packageHash = info[@"currentPackage"];
-
-    if (!packageHash) {
-        return nil;
-    }
-
-    return[self getPackageFolderPath : packageHash];
-}
-*/
 
 IAsyncOperation<hstring> CodePushPackage::GetCurrentPackageHashAsync()
 {

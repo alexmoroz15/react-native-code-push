@@ -157,6 +157,8 @@ hstring CodePushUpdateUtils::ComputeFinalHashFromManifest(IMap<hstring, hstring>
     }
 
     auto manifestString{ manifestObject.Stringify() };
+
+    // I'm not 100% on the correct encoding scheme. It's either LE or BE
     auto manifestData{ CryptographicBuffer::ConvertStringToBinary(manifestString, BinaryStringEncoding::Utf16BE) };
     return ComputeHashForData(manifestData);
 }
@@ -407,6 +409,30 @@ error : (NSError**)error
 }
 */
 
+JsonObject CodePushUpdateUtils::VerifyAndDecodeJWT(const wstring& jwt, const wstring& publicKey)
+{
+
+}
+
+/*
++(NSDictionary*)verifyAndDecodeJWT:(NSString*)jwt
+withPublicKey : (NSString*)publicKey
+error : (NSError**)error
+{
+    id <JWTAlgorithmDataHolderProtocol> verifyDataHolder = [JWTAlgorithmRSFamilyDataHolder new].keyExtractorType([JWTCryptoKeyExtractor publicKeyWithPEMBase64].type).algorithmName(@"RS256").secret(publicKey);
+
+    JWTCodingBuilder* verifyBuilder = [JWTDecodingBuilder decodeMessage : jwt].addHolder(verifyDataHolder);
+    JWTCodingResultType* verifyResult = verifyBuilder.result;
+    if (verifyResult.successResult) {
+        return verifyResult.successResult.payload;
+    }
+    else {
+        *error = verifyResult.errorResult.error;
+        return nil;
+    }
+}
+*/
+
 IAsyncOperation<bool> CodePushUpdateUtils::VerifyUpdateSignatureForAsync(const StorageFolder& updateFolder, wstring_view newUpdateHash, wstring_view publicKeyString)
 {
     CodePushUtils::Log(L"Verifying signature for folder path: " + updateFolder.Path());
@@ -420,8 +446,31 @@ IAsyncOperation<bool> CodePushUpdateUtils::VerifyUpdateSignatureForAsync(const S
     catch (const hresult_error& ex)
     {
         CodePushUtils::Log(L"The update could not be verified because no signature was found. " + ex.message());
+        throw ex;
+    }
+
+
+
+    /*
+    NSError* payloadDecodingError;
+    NSDictionary* envelopedPayload = [self verifyAndDecodeJWT : signature withPublicKey : publicKey error : &payloadDecodingError];
+    if (payloadDecodingError) {
+        CPLog(@"The update could not be verified because it was not signed by a trusted party. %@", payloadDecodingError);
+        *error = payloadDecodingError;
         return false;
     }
+
+    CPLog(@"JWT signature verification succeeded, payload content:  %@", envelopedPayload);
+
+    if (![envelopedPayload objectForKey : @"contentHash"]) {
+        CPLog(@"The update could not be verified because the signature did not specify a content hash.");
+        return false;
+    }
+
+    NSString* contentHash = envelopedPayload[@"contentHash"];
+
+    return[contentHash isEqualToString : newUpdateHash];
+    */
 
     return false;
 }
