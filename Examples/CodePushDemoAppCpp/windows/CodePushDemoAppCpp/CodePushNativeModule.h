@@ -130,12 +130,9 @@ namespace CodePush
 
 		static IAsyncOperation<StorageFile> GetBinaryBundleAsync();
 		static IAsyncOperation<StorageFile> GetBundleFileAsync();
-		static path GetBundlePath();
 
-		// Not sure exactly why these methods exist
+		static IAsyncOperation<StorageFolder> GetBundleAssetsFolderAsync();
 		static StorageFolder GetLocalStorageFolder();
-		static path GetLocalStoragePath();
-		path GetBundleAssetsPath();
 		
 		void OverrideAppVersion(wstring_view appVersion);
 		void SetDeploymentKey(wstring_view deploymentKey);
