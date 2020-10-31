@@ -176,16 +176,24 @@ bundle : (NSBundle*)resourceBundle
 }
 */
 
+IAsyncOperation<StorageFolder> CodePushNativeModule::GetBundleAssetsFolderAsync()
+{
+    auto appXFolder{ Windows::ApplicationModel::Package::Current().InstalledLocation() };
+    auto bundleFolder{ (co_await appXFolder.TryGetItemAsync(L"Bundle")).try_as<StorageFolder>() };
+    if (bundleFolder != nullptr)
+    {
+        auto bundleAssetsFolder{ (co_await bundleFolder.TryGetItemAsync(CodePushUpdateUtils::AssetsFolderName)).try_as<StorageFolder>() };
+        co_return bundleAssetsFolder;
+    }
+    co_return nullptr;
+}
+
 // Rather than store files in the library files, CodePush for ReactNativeWindows will use AppData folders.
 StorageFolder CodePushNativeModule::GetLocalStorageFolder()
 {
     return ApplicationData::Current().LocalFolder();
 }
 
-path CodePushNativeModule::GetLocalStoragePath()
-{
-    return wstring_view(GetLocalStorageFolder().Path());
-}
 
 void CodePushNativeModule::OverrideAppVersion(wstring_view appVersion) 
 {
