@@ -66,11 +66,7 @@ namespace CodePush
     struct CodePushUpdateUtils
     {
     private:
-        inline static const wstring_view AssetsFolderName{ L"assets" };
-        inline static const wstring_view BinaryHashKey{ L"CodePushBinaryHash" };
-        inline static const wstring_view ManifestFolderPrefix{ L"CodePush" };
-        inline static const wstring_view BundleJWTFile{ L".codepushrelease" };
-
+        
         /*
          Ignore list for hashing
          */
@@ -86,7 +82,12 @@ namespace CodePush
         static IAsyncOperation<hstring> GetSignatureForAsync(const StorageFolder& folder);
 
     public:
-        static bool CopyEntriesInFolder(StorageFolder& sourceFolder, StorageFolder& destFolder);
+        inline static const wstring_view AssetsFolderName{ L"assets" };
+        inline static const wstring_view BinaryHashKey{ L"CodePushBinaryHash" };
+        inline static const wstring_view ManifestFolderPrefix{ L"CodePush" };
+        inline static const wstring_view BundleJWTFile{ L".codepushrelease" };
+
+        static IAsyncOperation<bool> CopyEntriesInFolderAsync(StorageFolder& sourceFolder, StorageFolder& destFolder);
         static StorageFile FildMainBundleInFolder(StorageFolder& folderPath, const wstring& expectedFileName);
         static IAsyncOperation<hstring> GetHashForBinaryContents(const StorageFile& binaryBundle);
         static IAsyncOperation<hstring> ModifiedDateStringOfFileAsync(const StorageFile& file);
