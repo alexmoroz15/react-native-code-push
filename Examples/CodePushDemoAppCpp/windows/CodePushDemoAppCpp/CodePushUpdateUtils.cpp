@@ -207,6 +207,31 @@ hstring CodePushUpdateUtils::ComputeHashForData(const IBuffer& inputData)
 }
 */
 
+IAsyncOperation<bool> CodePushUpdateUtils::CopyEntriesInFolderAsync(StorageFolder& sourceFolder, StorageFolder& destFolder)
+{
+    auto entries{ co_await sourceFolder.GetItemsAsync() };
+    for (const auto& entry : entries)
+    {
+        if (entry.IsOfType(StorageItemTypes::File))
+        {
+            auto file{ entry.try_as<StorageFile>() };
+            co_await file.CopyAsync(destFolder, file.Name(), NameCollisionOption::ReplaceExisting);
+        }
+        else if (entry.IsOfType(StorageItemTypes::Folder))
+        {
+            auto folder{ entry.try_as<StorageFolder>() };
+            auto folderCopy{ co_await destFolder.CreateFolderAsync(folder.Name()) };
+            auto result{ co_await CopyEntriesInFolderAsync(folder, folderCopy) };
+            if (!result)
+            {
+                co_return false;
+            }
+        }
+    }
+
+    co_return true;
+}
+
 IAsyncOperation<hstring> CodePushUpdateUtils::GetHashForBinaryContents(const StorageFile& binaryBundle)
 {
     // Get the cached hash from local settings if it exists
