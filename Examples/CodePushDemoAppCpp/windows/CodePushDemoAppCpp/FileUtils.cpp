@@ -55,34 +55,6 @@ IAsyncOperation<StorageFile> FileUtils::GetFileAtPathAsync(const StorageFolder& 
     auto fileName{ relPath.substr(start) };
     auto file{ (co_await folder.TryGetItemAsync(fileName)).try_as<StorageFile>() };
     co_return file;
-
-
-    /*
-    stack<wstring> pathParts;
-    while (relPath.has_parent_path())
-    {
-        pathParts.push(relPath.stem());
-        relPath = relPath.parent_path();
-    }
-
-    while (pathParts.size() > 2)
-    {
-        auto folder{ (co_await rootFolder.TryGetItemAsync(pathParts.top())).try_as<StorageFolder>() };
-        if (folder == nullptr)
-        {
-            return nullptr;
-        }
-        rootFolder = folder;
-        pathParts.pop();
-    }
-
-    auto file{ (co_await rootFolder.TryGetItemAsync(pathParts.top())).try_as<StorageFile>() };
-    if (file == nullptr)
-    {
-        co_return nullptr;
-    }
-    co_return file;
-    */
 }
 
 // Returns the folder at the specified path relative to the rootfolder
