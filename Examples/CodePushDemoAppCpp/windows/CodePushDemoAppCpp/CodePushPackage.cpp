@@ -64,7 +64,7 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
 
     auto isZip{ co_await downloadHandler.Download(updatePackage.GetNamedString(L"downloadUrl")) };
 
-    StorageFolder newUpdateFolder{ nullptr };
+    StorageFolder newUpdateFolder{ co_await codePushFolder.CreateFolderAsync(newUpdateHash, CreationCollisionOption::ReplaceExisting) };
     StorageFile newUpdateMetadataFile{ nullptr };
     auto mutableUpdatePackage{ updatePackage };
     if (isZip)
@@ -74,6 +74,7 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
         downloadFile.DeleteAsync();
 
         auto isDiffUpdate{ false };
+        
         auto diffManifestFile{ (co_await unzippedFolder.TryGetItemAsync(DiffManifestFileName)).try_as<StorageFile>() };
         if (diffManifestFile != nullptr)
         {
@@ -82,88 +83,50 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
 
         if (isDiffUpdate)
         {
-            /*
             // Copy the current package to the new package.
-            NSString *currentPackageFolderPath = [self getCurrentPackageFolderPath:&error];
-            if (error) {
-                failCallback(error);
-                return;
-            }
+            auto currentPackageFolder{ co_await GetCurrentPackageFolderAsync() };
 
-            if (currentPackageFolderPath == nil) {
+            if (currentPackageFolder == nullptr)
+            {
                 // Currently running the binary version, copy files from the bundled resources
-                NSString *newUpdateCodePushPath = [newUpdateFolderPath stringByAppendingPathComponent:[CodePushUpdateUtils manifestFolderPrefix]];
-                [[NSFileManager defaultManager] createDirectoryAtPath:newUpdateCodePushPath
-                                            withIntermediateDirectories:YES
-                                                            attributes:nil
-                                                                error:&error];
-                if (error) {
-                    failCallback(error);
-                    return;
-                }
+                auto newUpdateCodePushFolder{ co_await newUpdateFolder.CreateFolderAsync(CodePushUpdateUtils::ManifestFolderPrefix) };
 
-                [[NSFileManager defaultManager] copyItemAtPath:[CodePush bundleAssetsPath]
-                                                        toPath:[newUpdateCodePushPath stringByAppendingPathComponent:[CodePushUpdateUtils assetsFolderName]]
-                                                            error:&error];
-                if (error) {
-                    failCallback(error);
-                    return;
-                }
+                auto binaryAssetsFolder{ co_await CodePushNativeModule::GetBundleAssetsFolderAsync() };
+                auto newUpdateAssetsFolder{ co_await newUpdateCodePushFolder.CreateFolderAsync(CodePushUpdateUtils::AssetsFolderName) };
+                CodePushUpdateUtils::CopyEntriesInFolderAsync(binaryAssetsFolder, newUpdateAssetsFolder);
 
-                [[NSFileManager defaultManager] copyItemAtPath:[[CodePush binaryBundleURL] path]
-                                                        toPath:[newUpdateCodePushPath stringByAppendingPathComponent:[[CodePush binaryBundleURL] lastPathComponent]]
-                                                            error:&error];
-                if (error) {
-                    failCallback(error);
-                    return;
-                }
-            } else {
-                [[NSFileManager defaultManager] copyItemAtPath:currentPackageFolderPath
-                                                        toPath:newUpdateFolderPath
-                                                            error:&error];
-                if (error) {
-                    failCallback(error);
-                    return;
-                }
+                auto binaryBundleFile{ co_await CodePushNativeModule::GetBinaryBundleAsync() };
+                co_await binaryBundleFile.CopyAsync(newUpdateCodePushFolder);
+            }
+            else
+            {
+                // Copy the contents of the current package to the new package. (how are conflicts resolved?)
+                co_await CodePushUpdateUtils::CopyEntriesInFolderAsync(currentPackageFolder, newUpdateFolder);
             }
 
-            // Delete files mentioned in the manifest.
-            NSString *manifestContent = [NSString stringWithContentsOfFile:diffManifestFilePath
-                                                                    encoding:NSUTF8StringEncoding
-                                                                        error:&error];
-            if (error) {
-                failCallback(error);
-                return;
-            }
+            auto manifestContent{ co_await FileIO::ReadTextAsync(diffManifestFile, UnicodeEncoding::Utf8) };
+            auto manifestJson{ JsonObject::Parse(manifestContent) };
+            auto deletedFiles{ manifestJson.TryLookup(L"deletedFiles") };
+            auto deletedFilesArray{ deletedFiles.try_as<JsonArray>() };
+            //auto deletedFiles{ manifestJson.GetNamedArray(L"deletedFiles") };
 
-            NSData *data = [manifestContent dataUsingEncoding:NSUTF8StringEncoding];
-            NSDictionary *manifestJSON = [NSJSONSerialization JSONObjectWithData:data
-                                                                            options:kNilOptions
-                                                                            error:&error];
-            NSArray *deletedFiles = manifestJSON[@"deletedFiles"];
-            for (NSString *deletedFileName in deletedFiles) {
-                NSString *absoluteDeletedFilePath = [newUpdateFolderPath stringByAppendingPathComponent:deletedFileName];
-                if ([[NSFileManager defaultManager] fileExistsAtPath:absoluteDeletedFilePath]) {
-                    [[NSFileManager defaultManager] removeItemAtPath:absoluteDeletedFilePath
-                                                                error:&error];
-                    if (error) {
-                        failCallback(error);
-                        return;
+            if (deletedFilesArray != nullptr)
+            {
+                for (const auto& deletedFileName : deletedFilesArray)
+                {
+                    auto fileToDelete{ co_await FileUtils::GetFileAtPathAsync(newUpdateFolder, deletedFileName.GetString()) };
+                    if (fileToDelete != nullptr)
+                    {
+                        co_await fileToDelete.DeleteAsync();
                     }
                 }
             }
 
-            [[NSFileManager defaultManager] removeItemAtPath:diffManifestFilePath
-                                                        error:&error];
-            if (error) {
-                failCallback(error);
-                return;
-            }
-            */
+            co_await diffManifestFile.DeleteAsync();
         }
 
-        co_await unzippedFolder.RenameAsync(newUpdateHash, NameCollisionOption::ReplaceExisting);
-        newUpdateFolder = unzippedFolder;
+        co_await CodePushUpdateUtils::CopyEntriesInFolderAsync(unzippedFolder, newUpdateFolder);
+        co_await unzippedFolder.DeleteAsync();
 
         auto relativeBundlePath{ co_await FileUtils::FindFilePathAsync(newUpdateFolder, expectedBundleFileName) };
         if (!relativeBundlePath.empty())
@@ -261,7 +224,6 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
     }
     else
     {
-        newUpdateFolder = co_await codePushFolder.CreateFolderAsync(newUpdateHash, CreationCollisionOption::ReplaceExisting);
         co_await downloadFile.MoveAsync(newUpdateFolder, UpdateBundleFileName, NameCollisionOption::ReplaceExisting);
     }
 
@@ -282,16 +244,6 @@ IAsyncOperation<StorageFolder> GetCodePushFolderAsync()
         co_return co_await codePushFolder.CreateFolderAsync(L"TestPackages", CreationCollisionOption::OpenIfExists);
     }
     co_return codePushFolder;
-}
-
-path GetCodePushPath()
-{
-    auto codePushPath{ CodePushNativeModule::GetLocalStoragePath() / L"CodePush" };
-    if (CodePushNativeModule::IsUsingTestConfiguration())
-    {
-        codePushPath /= L"TestPackages";
-    }
-    return codePushPath;
 }
 
 IAsyncOperation<StorageFolder> GetCurrentPackageFolderAsync()
@@ -425,11 +377,6 @@ IAsyncOperation<hstring> GetPreviousPackageHashAsync()
     co_return previousHash.GetString();
 }
 
-path GetDownloadFilePath()
-{
-    return GetCodePushPath() / CodePushPackage::DownloadFileName;
-}
-
 IAsyncOperation<JsonObject> CodePushPackage::GetPackageAsync(wstring_view packageHash)
 {
     auto updateDirectory{ co_await GetPackageFolderAsync(packageHash) };
@@ -454,11 +401,6 @@ IAsyncOperation<StorageFolder> GetPackageFolderAsync(wstring_view packageHash)
 {
     auto codePushFolder{ co_await GetCodePushFolderAsync() };
     co_return (co_await codePushFolder.TryGetItemAsync(packageHash)).try_as<StorageFolder>();
-}
-
-path CodePushPackage::GetPackageFolderPath(wstring_view packageHash)
-{
-    return GetCodePushPath() / packageHash;
 }
 
 IAsyncOperation<bool> CodePushPackage::InstallPackageAsync(JsonObject updatePackage, bool removePendingUpdate)
@@ -557,17 +499,6 @@ IAsyncOperation<StorageFile> GetStatusFileAsync()
 {
     auto codePushFolder{ co_await GetCodePushFolderAsync() };
     co_return (co_await codePushFolder.TryGetItemAsync(CodePushPackage::StatusFile)).try_as<StorageFile>();
-}
-
-path GetStatusFilePath()
-{
-    auto codePushpath{ GetCodePushPath() };
-    return codePushpath / CodePushPackage::StatusFile;
-}
-
-path GetUnzippedFolderPath()
-{
-    return GetCodePushPath() / CodePushPackage::UnzippedFolderName;
 }
 
 IAsyncOperation<bool> UpdateCurrentPackageInfoAsync(JsonObject packageInfo)
