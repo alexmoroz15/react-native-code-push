@@ -411,7 +411,9 @@ error : (NSError**)error
 
 JsonObject CodePushUpdateUtils::VerifyAndDecodeJWT(const wstring& jwt, const wstring& publicKey)
 {
-
+    // This requires an external library to handle JWT verification.
+    // I'm not in the mood right now to look through libraries
+    return nullptr;
 }
 
 /*
