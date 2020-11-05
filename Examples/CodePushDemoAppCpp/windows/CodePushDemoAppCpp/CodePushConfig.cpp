@@ -2,10 +2,12 @@
 
 #include "CodePushConfig.h"
 #include "winrt/Windows.Foundation.Collections.h"
+#include "winrt/Windows.Storage.h"
 
 #include <string_view>
 
 using namespace winrt;
+using namespace Windows::Storage;
 using namespace Windows::Foundation::Collections;
 
 using namespace std;
@@ -55,13 +57,27 @@ CodePushConfig& CodePushConfig::Init(const IMap<hstring, hstring>& configMap)
         }
     };
 
+    auto localSettings{ ApplicationData::Current().LocalSettings() };
+    hstring clientUniqueId;
+    auto clientUniqueIdData{ localSettings.Values().TryLookup(ClientUniqueIDConfigKey) };
+    if (clientUniqueIdData == nullptr)
+    {
+        auto newGuid{ GuidHelper::CreateNewGuid() };
+        clientUniqueId = to_hstring(newGuid);
+        localSettings.Values().Insert(ClientUniqueIDConfigKey, box_value(clientUniqueId));
+    }
+    else
+    {
+        clientUniqueId = unbox_value<hstring>(clientUniqueIdData);
+    }
+
     addToConfiguration(AppVersionConfigKey, appVersion);
     addToConfiguration(BuildVersionConfigKey, buildVersion);
     addToConfiguration(DeploymentKeyConfigKey, deploymentKey);
     addToConfiguration(PublicKeyKey, publicKey);
     addToConfiguration(ServerURLConfigKey, serverUrl);
 
-    // set clientUniqueId
+    _currentConfig.configuration.Insert(ClientUniqueIDConfigKey, clientUniqueId);
 
     if (!serverUrl.has_value())
     {

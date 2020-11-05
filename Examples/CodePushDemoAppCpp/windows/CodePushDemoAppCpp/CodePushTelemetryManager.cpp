@@ -134,7 +134,8 @@ JsonObject CodePushTelemetryManager::GetUpdateReport(const JsonObject& currentPa
 void CodePushTelemetryManager::RecordStatusReported(const JsonObject& statusReport)
 {
     // We don't need to record rollback reports, so exit early if that's what was specified.
-    if (statusReport.GetNamedString(StatusKey) == DeploymentFailed)
+    auto status{ statusReport.TryLookup(StatusKey) };
+    if (status != nullptr && status.ValueType() == JsonValueType::String && status.GetString() == DeploymentFailed)
     {
         return;
     }
