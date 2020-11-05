@@ -220,7 +220,7 @@ IAsyncOperation<bool> CodePushUpdateUtils::CopyEntriesInFolderAsync(StorageFolde
         else if (entry.IsOfType(StorageItemTypes::Folder))
         {
             auto folder{ entry.try_as<StorageFolder>() };
-            auto folderCopy{ co_await destFolder.CreateFolderAsync(folder.Name()) };
+            auto folderCopy{ co_await destFolder.CreateFolderAsync(folder.Name(), CreationCollisionOption::ReplaceExisting) };
             auto result{ co_await CopyEntriesInFolderAsync(folder, folderCopy) };
             if (!result)
             {
