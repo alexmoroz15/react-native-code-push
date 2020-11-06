@@ -37,22 +37,22 @@ using namespace std;
 /// </summary>
 App::App() noexcept
 {
-//#if BUNDLE
+#if BUNDLE
 
     JavaScriptBundleFile(L"index.windows");
     InstanceSettings().UseWebDebugger(false);
     InstanceSettings().UseFastRefresh(false);
-/*#else
+#else
     JavaScriptMainModuleName(L"index");
     InstanceSettings().UseWebDebugger(true);
     InstanceSettings().UseFastRefresh(true);
-#endif*/
+#endif
 
-//#if _DEBUG
+#if _DEBUG
     InstanceSettings().UseDeveloperSupport(true);
-/*#else
+#else
     InstanceSettings().UseDeveloperSupport(false);
-#endif*/
+#endif
 
     RegisterAutolinkedNativeModulePackages(PackageProviders()); // Includes any autolinked modules
 
@@ -72,8 +72,17 @@ App::App() noexcept
     hstring bundleRootPath{ bundlePath.substr(0, bundlePath.rfind('\\')) };
     InstanceSettings().BundleRootPath(bundleRootPath);
     */
-    
+
     InitializeComponent();
+
+    /*
+    auto bla = [](IInspectable const&, VisibilityChangedEventArgs const&)
+    {
+        OutputDebugStringW(L"\nHello World\n");
+    };
+    auto token{ Window::Current().VisibilityChanged(bla) };
+    */
+    
 }
 
 /// <summary>
@@ -87,6 +96,14 @@ void App::OnLaunched(activation::LaunchActivatedEventArgs const& e)
 
     Frame rootFrame = Window::Current().Content().as<Frame>();
     rootFrame.Navigate(xaml_typename<CodePushDemoAppCpp::MainPage>(), box_value(e.Arguments()));
+
+    /*
+    auto bla = [](IInspectable const&, VisibilityChangedEventArgs const&)
+    {
+        OutputDebugStringW(L"\nHello World\n");
+    };
+    auto token{ Window::Current().VisibilityChanged(bla) };
+    */
 }
 
 /// <summary>
@@ -98,6 +115,7 @@ void App::OnLaunched(activation::LaunchActivatedEventArgs const& e)
 /// <param name="e">Details about the suspend request.</param>
 void App::OnSuspending([[maybe_unused]] IInspectable const& sender, [[maybe_unused]] SuspendingEventArgs const& e)
 {
+    OutputDebugStringW(L"Application suspended\n");
     // Save application state and stop any background activity
 }
 
@@ -110,3 +128,4 @@ void App::OnNavigationFailed(IInspectable const&, NavigationFailedEventArgs cons
 {
     throw hresult_error(E_FAIL, hstring(L"Failed to load Page ") + e.SourcePageType().Name);
 }
+
