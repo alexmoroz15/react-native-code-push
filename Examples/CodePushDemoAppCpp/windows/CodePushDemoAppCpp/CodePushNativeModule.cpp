@@ -9,10 +9,12 @@
 #include "App.h"
 //#include "JSValueAdditions.h"
 
-#include <winrt/Windows.Data.Json.h>
-#include <winrt/Windows.Web.Http.h>
-#include <winrt/Windows.Web.Http.Headers.h>
-#include <winrt/Windows.Storage.Streams.h>
+#include "winrt/Windows.Data.Json.h"
+#include "winrt/Windows.Web.Http.h"
+#include "winrt/Windows.Web.Http.Headers.h"
+#include "winrt/Windows.Storage.Streams.h"
+#include "winrt/Windows.UI.Core.h"
+#include "winrt/Windows.UI.Xaml.h"
 
 #include <exception>
 #include <filesystem>
@@ -34,6 +36,8 @@ using namespace Windows::Web::Http;
 using namespace Windows::Storage;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation;
+using namespace Windows::UI::Core;
+using namespace Windows::UI::Xaml;
 
 using namespace std;
 using namespace filesystem;
@@ -367,12 +371,8 @@ IAsyncAction CodePushNativeModule::LoadBundle()
         }
     }
 
-    /*
-    m_context.UIDispatcher().Post([host = m_host]() {
-        host.ReloadInstance();
-        });
-        */
     m_host.ReloadInstance();
+    // The instance will call Initialize() upon reloading this module
 }
 
 /*
@@ -491,6 +491,66 @@ void CodePushNativeModule::SavePendingUpdate(wstring_view packageHash, bool isLo
     pendingUpdate.Insert(PendingUpdateIsLoadingKey, JsonValue::CreateBooleanValue(isLoading));
     localSettings.Values().Insert(PendingUpdateKey, box_value(pendingUpdate.Stringify()));
 }
+
+//#pragma mark - Application lifecycle event handlers
+
+void CodePushNativeModule::OnVisibilityChanged(IInspectable const&, VisibilityChangedEventArgs const& e)
+{
+    if (e.Visible())
+    {
+        // Window has entered foreground
+    }
+    else
+    {
+        // Window has entered background
+    }
+}
+
+// These two handlers will only be registered when there is
+// a resume-based update still pending installation.
+/*
+-(void)applicationWillEnterForeground
+{
+    // Determine how long the app was in the background and ensure
+    // that it meets the minimum duration amount of time.
+    int durationInBackground = 0;
+    if (_lastResignedDate) {
+        durationInBackground = [[NSDate date]timeIntervalSinceDate:_lastResignedDate];
+    }
+
+    if (_installMode == CodePushInstallModeOnNextSuspend) {
+        // We shouldn't use loadBundle in this case, because _appSuspendTimer will call loadBundleOnTick.
+        // We should cancel timer for _appSuspendTimer because otherwise, we would call loadBundle two times.
+        if (durationInBackground < _minimumBackgroundDuration) {
+            [_appSuspendTimer invalidate] ;
+            _appSuspendTimer = nil;
+        }
+    }
+    else {
+        // For resume install mode.
+        if (durationInBackground >= _minimumBackgroundDuration) {
+            [self restartAppInternal : NO] ;
+        }
+    }
+}
+*/
+
+/*
+- (void)applicationWillResignActive
+{
+    // Save the current time so that when the app is later
+    // resumed, we can detect how long it was in the background.
+    _lastResignedDate = [NSDate date];
+
+    if (_installMode == CodePushInstallModeOnNextSuspend && [[self class]isPendingUpdate:nil]) {
+        _appSuspendTimer = [NSTimer scheduledTimerWithTimeInterval : _minimumBackgroundDuration
+            target : self
+            selector : @selector(loadBundleOnTick:)
+            userInfo:nil
+            repeats : NO];
+    }
+}
+*/
 
 void CodePushNativeModule::Initialize(ReactContext const& reactContext) noexcept
 {

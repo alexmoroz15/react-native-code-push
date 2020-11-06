@@ -3,11 +3,11 @@
 #include "NativeModules.h"
 #include "winrt/Windows.Data.Json.h"
 #include "winrt/Windows.Storage.h"
+#include "winrt/Windows.UI.Xaml.h"
 
 #include <filesystem>
 
 #include "CodePushConfig.h"
-//#include "JSValueAdditions.h"
 
 // Helper functions for reading and sending JsonValues to and from JavaScript
 namespace winrt::Microsoft::ReactNative
@@ -23,6 +23,7 @@ namespace CodePush
 	using namespace Windows::Data::Json;
 	using namespace Windows::Foundation;
 	using namespace Windows::Storage;
+	using namespace Windows::UI::Xaml;
 	using namespace Microsoft::ReactNative;
 
 	using namespace std;
@@ -147,6 +148,8 @@ namespace CodePush
 		static bool IsUsingTestConfiguration();
 		static void SetUsingTestConfiguration(bool shouldUseTestConfiguration);
 		IAsyncAction ClearDebugUpdates();
+
+		static void OnVisibilityChanged(IInspectable const&, VisibilityChangedEventArgs const& e);
 
 		REACT_INIT(Initialize);
 		void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;
