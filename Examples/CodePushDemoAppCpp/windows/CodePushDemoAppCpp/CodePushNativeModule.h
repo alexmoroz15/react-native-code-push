@@ -38,8 +38,8 @@ namespace CodePush
 		bool m_hasResumeListener;
 		bool m_isFirstRunAfterUpdate;
 		int m_minimumBackgroundDuration;
-		DateTime m_lastResignedDate;
-		CodePushInstallMode m_installMode;
+		static DateTime m_lastResignedDate;
+		static CodePushInstallMode m_installMode;
 		// Don't know what to replace this with.
 		//NSTimer* _appSuspendTimer;
 		

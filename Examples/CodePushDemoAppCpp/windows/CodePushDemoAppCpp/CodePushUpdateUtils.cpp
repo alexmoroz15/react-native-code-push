@@ -150,16 +150,19 @@ manifest : (NSMutableArray*)manifest
 
 hstring CodePushUpdateUtils::ComputeFinalHashFromManifest(IMap<hstring, hstring>& manifest)
 {
-    JsonObject manifestObject;
+    JsonArray manifestArray;
     for (const auto& pair : manifest)
     {
-        manifestObject.Insert(pair.Key(), JsonValue::CreateStringValue(pair.Value()));
+        manifestArray.Append(JsonValue::CreateStringValue(pair.Key() + L":" + pair.Value()));
     }
 
-    auto manifestString{ manifestObject.Stringify() };
+    auto manifestString{ manifestArray.Stringify() };
+    //auto manifestStringUtf8{ to_string(manifestString) };
 
-    // I'm not 100% on the correct encoding scheme. It's either LE or BE
-    auto manifestData{ CryptographicBuffer::ConvertStringToBinary(manifestString, BinaryStringEncoding::Utf16BE) };
+    //auto manifestBinary{ CryptographicBuffer::ConvertStringToBinary(manifestString, BinaryStringEncoding::Utf8) };
+    //auto manifestString2{ CryptographicBuffer::ConvertBinaryToString(BinaryStringEncoding::Utf8, manifestBinary) };
+
+    auto manifestData{ CryptographicBuffer::ConvertStringToBinary(manifestString, BinaryStringEncoding::Utf8) };
     return ComputeHashForData(manifestData);
 }
 
@@ -220,7 +223,7 @@ IAsyncOperation<bool> CodePushUpdateUtils::CopyEntriesInFolderAsync(StorageFolde
         else if (entry.IsOfType(StorageItemTypes::Folder))
         {
             auto folder{ entry.try_as<StorageFolder>() };
-            auto folderCopy{ co_await destFolder.CreateFolderAsync(folder.Name(), CreationCollisionOption::ReplaceExisting) };
+            auto folderCopy{ co_await destFolder.CreateFolderAsync(folder.Name(), CreationCollisionOption::OpenIfExists) };
             auto result{ co_await CopyEntriesInFolderAsync(folder, folderCopy) };
             if (!result)
             {
@@ -386,6 +389,17 @@ IAsyncOperation<bool> CodePushUpdateUtils::VerifyFolderHashAsync(const StorageFo
     auto result{ co_await AddContentsOfFolderToManifestAsync(finalUpdateFolder, L"", updateContentsManifest) };
 
     // log manifest
+    wstring manifestLog{ L"{" };
+    for (const auto& pair : updateContentsManifest)
+    {
+        manifestLog += L"{\"";
+        manifestLog += pair.Key();
+        manifestLog += L"\": \"";
+        manifestLog += pair.Value();
+        manifestLog += L"\"}, ";
+    }
+    manifestLog += L"}\n";
+    OutputDebugStringW(manifestLog.c_str());
 
     if (!result)
     {

@@ -139,6 +139,12 @@ IAsyncAction CodePushPackage::DownloadPackageAsync(
             throw hresult_error{ HRESULT_FROM_WIN32(E_FAIL), errorMessage };
         }
 
+        newUpdateMetadataFile = (co_await newUpdateFolder.TryGetItemAsync(UpdateMetadataFileName)).try_as<StorageFile>();
+        if (newUpdateMetadataFile != nullptr)
+        {
+            co_await newUpdateMetadataFile.DeleteAsync();
+        }
+
         // What on earth is this for?
         /*
         if ([[NSFileManager defaultManager] fileExistsAtPath:newUpdateMetadataPath]) {

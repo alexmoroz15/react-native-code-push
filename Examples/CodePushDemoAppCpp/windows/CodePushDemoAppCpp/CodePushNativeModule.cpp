@@ -44,6 +44,7 @@ using namespace filesystem;
 
 using namespace CodePush;
 
+CodePushNativeModule::CodePushInstallMode CodePushNativeModule::m_installMode{ CodePushInstallMode::IMMEDIATE };
 bool CodePushNativeModule::isRunningBinaryVersion{ false };
 bool CodePushNativeModule::needToReportRollback{ false };
 bool CodePushNativeModule::testConfigurationFlag{ false };
@@ -496,9 +497,18 @@ void CodePushNativeModule::SavePendingUpdate(wstring_view packageHash, bool isLo
 
 void CodePushNativeModule::OnVisibilityChanged(IInspectable const&, VisibilityChangedEventArgs const& e)
 {
+    OutputDebugStringW(L"\nHello World!\n");
     if (e.Visible())
     {
         // Window has entered foreground
+        if (m_installMode == CodePushInstallMode::ON_NEXT_SUSPEND)
+        {
+
+        }
+        else
+        {
+            // For resume install mode.
+        }
     }
     else
     {
@@ -741,6 +751,8 @@ fire_and_forget CodePushNativeModule::InstallUpdateAsync(JsonObject updatePackag
             // can check for pending updates which support "restart on resume"
             
             // Need to find a way to do this.
+            auto token{ Window::Current().VisibilityChanged(OnVisibilityChanged) };
+
             /*
             [[NSNotificationCenter defaultCenter]addObserver:self
                 selector : @selector(applicationWillEnterForeground)
